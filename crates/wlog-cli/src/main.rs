@@ -9,7 +9,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, anyhow};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 use wlog_proto::{NodeType, TaskId, TaskStatus};
@@ -111,6 +112,52 @@ enum Command {
         #[arg(long, requires = "reject")]
         reason: Option<String>,
     },
+    /// Manage repository git hooks.
+    Hooks {
+        #[command(subcommand)]
+        action: HooksAction,
+    },
+    /// Print a shell completion script.
+    Completions {
+        /// Target shell.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum HooksAction {
+    /// Install wlog-managed hooks (post-commit, post-merge, pre-push).
+    Install {
+        /// Repository root (defaults to current working directory).
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        /// Overwrite hooks that wlog did not write.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Remove wlog-managed hooks; foreign hooks are left untouched.
+    Uninstall {
+        /// Repository root.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
+    /// Report which hooks are currently managed by wlog.
+    Status {
+        /// Repository root.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
+    /// Internal: hook scripts invoke this to forward an event to the
+    /// daemon socket. Phase 1 implements the publisher; today this only
+    /// logs and exits 0 so the hook never fails the user's commit.
+    Notify {
+        /// Hook kind name (`post-commit`, `post-merge`, `pre-push`).
+        kind: String,
+        /// Remaining hook arguments.
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 #[tokio::main]
@@ -160,7 +207,80 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             reject,
             reason,
         } => ack(cli.config.as_deref(), id, edit, reject, reason).await,
+        Command::Hooks { action } => Ok(hooks(action)),
+        Command::Completions { shell } => Ok(completions(shell)),
     }
+}
+
+fn hooks(action: HooksAction) -> ExitCode {
+    use wlog_ingest_git::{HookAction, HookKind, HookReport, install_all, status, uninstall_all};
+
+    fn render(action: &str, report: &HookReport) {
+        println!("{action}:");
+        for (kind, outcome) in &report.entries {
+            let label = match kind {
+                HookKind::PostCommit => "post-commit",
+                HookKind::PostMerge => "post-merge",
+                HookKind::PrePush => "pre-push",
+            };
+            let outcome_str = match outcome {
+                HookAction::Installed => "installed",
+                HookAction::Unchanged => "unchanged",
+                HookAction::Overwritten => "overwritten",
+                HookAction::Removed => "removed",
+                HookAction::Skipped => "skipped",
+            };
+            println!("  {label:<12} {outcome_str}");
+        }
+    }
+
+    match action {
+        HooksAction::Install { repo, force } => match install_all(&repo, force) {
+            Ok(report) => {
+                render("install", &report);
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::from(1)
+            }
+        },
+        HooksAction::Uninstall { repo } => match uninstall_all(&repo) {
+            Ok(report) => {
+                render("uninstall", &report);
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::from(1)
+            }
+        },
+        HooksAction::Status { repo } => match status(&repo) {
+            Ok(report) => {
+                render("status", &report);
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::from(1)
+            }
+        },
+        HooksAction::Notify { kind, args } => {
+            // Phase 1 issue #26 wires this to the local socket and NATS.
+            // Until then we log to stderr (info level by default
+            // suppressed) and return success so the hook never blocks
+            // the commit.
+            tracing::info!(kind = %kind, args = ?args, "hook notify (stub)");
+            ExitCode::SUCCESS
+        }
+    }
+}
+
+fn completions(shell: Shell) -> ExitCode {
+    let mut cmd = Cli::command();
+    let name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
+    ExitCode::SUCCESS
 }
 
 async fn init(

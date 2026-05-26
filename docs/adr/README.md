@@ -31,6 +31,9 @@ decision land as `### Updates` sections appended at the bottom.
 | [0002](0002-public-repository-and-branch-protection.md) | Public repository flip and branch protection | Accepted | 2026-05-26 |
 | [0003](0003-task-dag-schema.md) | Task DAG schema design | Accepted | 2026-05-26 |
 | [0004](0004-embedding-model.md) | Embedding model and dimensionality | Accepted | 2026-05-26 |
+| [0005](0005-llm-client.md) | LLM client | Accepted | 2026-05-26 |
+| [0006](0006-prompt-versioning.md) | Prompt versioning strategy | Accepted | 2026-05-26 |
+| [0007](0007-nats-subject-hierarchy.md) | NATS subject hierarchy | Accepted | 2026-05-26 |
 
 ## Numbering
 
@@ -45,9 +48,6 @@ not earlier:
 
 | ID | Topic | Expected phase |
 | --- | --- | --- |
-| 0005 | LLM client crate selection | Phase 1 |
-| 0006 | Prompt versioning strategy | Phase 1 |
-| 0007 | NATS subject hierarchy | Phase 1 |
 | 0008 | Estimation model (log-normal vs gamma) | Phase 2 |
 | 0009 | Dispatcher decision boundaries | Phase 3 |
 | 0010 | Covenant integration model | Phase 3 |
