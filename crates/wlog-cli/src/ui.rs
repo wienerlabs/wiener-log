@@ -284,3 +284,94 @@ pub fn kv_table(rows: &[(&str, String)]) {
     }
     println!("{t}");
 }
+
+/// Redact the user-info portion of a URL (e.g. `postgres://u:pw@h`).
+/// Returns `scheme://user:***@host`. Used by `wlog where` so screenshots
+/// don't leak Postgres passwords. Idempotent on non-URLs.
+#[must_use]
+pub fn redact_url(raw: &str) -> String {
+    if let Some((scheme, rest)) = raw.split_once("://")
+        && let Some(at) = rest.find('@')
+        && let Some((user, _pw)) = rest[..at].split_once(':')
+    {
+        return format!("{scheme}://{user}:***@{}", &rest[at + 1..]);
+    }
+    raw.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redact_url_masks_password() {
+        let masked = redact_url("postgres://wlog:secret123@db.example.com:5432/wlog");
+        assert_eq!(masked, "postgres://wlog:***@db.example.com:5432/wlog");
+    }
+
+    #[test]
+    fn redact_url_passthrough_when_no_creds() {
+        assert_eq!(
+            redact_url("postgres://db.example.com/wlog"),
+            "postgres://db.example.com/wlog"
+        );
+    }
+
+    #[test]
+    fn redact_url_passthrough_when_not_url() {
+        assert_eq!(redact_url("<unset>"), "<unset>");
+        assert_eq!(redact_url("just-a-string"), "just-a-string");
+    }
+
+    #[test]
+    fn color_override_force_off() {
+        set_color_override(-1);
+        assert!(!should_color());
+        set_color_override(0);
+    }
+
+    #[test]
+    fn color_override_force_on() {
+        set_color_override(1);
+        assert!(should_color());
+        set_color_override(0);
+    }
+
+    #[test]
+    fn symbols_have_ascii_fallback() {
+        set_color_override(-1);
+        assert_eq!(symbol(Status::Ok), "[ok]");
+        assert_eq!(symbol(Status::Fail), "[fail]");
+        assert_eq!(symbol(Status::Warn), "[warn]");
+        assert_eq!(symbol(Status::Info), "[info]");
+        assert_eq!(symbol(Status::Neutral), "[--]");
+        set_color_override(0);
+    }
+
+    #[test]
+    fn symbols_use_unicode_when_colored() {
+        set_color_override(1);
+        let ok = symbol(Status::Ok);
+        assert!(ok.contains('✓'), "expected check mark, got {ok:?}");
+        let fail = symbol(Status::Fail);
+        assert!(fail.contains('✗'), "expected ballot x, got {fail:?}");
+        set_color_override(0);
+    }
+
+    #[test]
+    fn dim_passthrough_when_no_color() {
+        set_color_override(-1);
+        assert_eq!(dim("hello"), "hello");
+        set_color_override(0);
+    }
+
+    #[test]
+    fn quiet_toggles_via_atomic_and_env() {
+        set_quiet(true);
+        assert!(is_quiet());
+        set_quiet(false);
+        // Env should still flip it independently.
+        // (Test guard: not all environments allow safe env mutation
+        // mid-test; we just verify the atomic path here.)
+    }
+}

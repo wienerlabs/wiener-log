@@ -7,6 +7,51 @@ once it reaches v1.0.0.
 
 ## [Unreleased]
 
+### Added since 0.1.0
+
+- **CLI banner** (`wlog banner`): ASCII Wiener Labs logo. TTY-aware, NO_COLOR
+  + WLOG_COLOR honored, truecolor #fff4dd cream + #0e0e0e foreground.
+- **CLI banner on startup** for `wlog init` and `wlog daemon run`.
+- **Operational infrastructure**:
+  - `infra/monitor/` Grafana 11 + Loki 3 + Promtail + Prometheus 2.55 stack
+    with pre-provisioned `WienerLog Overview` dashboard.
+  - `infra/systemd/` hardened `wlog-daemon.service` + nightly
+    `wlog-backup.timer` + 5-min `wlog-healthcheck.timer`.
+  - `infra/macos/` developer launchd plist.
+  - `scripts/{backup,restore}-postgres.sh` + `scripts/healthcheck-ping.sh`.
+- **Six live runbooks** under `docs/runbooks/`: deploy, backup, incident,
+  monitoring, llm-cost, webhook-rotation.
+- **Control plane**:
+  - `wlog status` local diagnostic.
+  - `wlog admin {users, workspaces, tail, replay}` founder-only cross-workspace
+    surface.
+  - `docs/onboarding.md` employee install guide,
+    `docs/control-plane.md` founder operator manual,
+    `docs/calisanlar-icin.md` TR non-technical intro.
+  - `scripts/install-wlog.sh` employee one-line installer.
+- **Professional CLI UI pass** (ADR-0008):
+  - `crates/wlog-cli/src/ui.rs` shared visual layer with semantic colors,
+    Unicode status symbols, banner_heading, section, kv, divider,
+    error/hint/warning, comfy-table builder.
+  - Global `--quiet` / `--no-color` / `WLOG_QUIET` / `NO_COLOR` flags with
+    AtomicI8 runtime override.
+  - 9 unit tests covering redact_url, symbols, color/quiet overrides.
+- **Diagnostic command family** (ADR-0009):
+  - `wlog where` paths summary with password redaction.
+  - `wlog about` build/version/license/target info.
+  - `wlog doctor [--offline]` extended health check + docker container scan.
+- **Operator subcommands**:
+  - `wlog log [--limit] [--kind] [--all-workspaces]` recent events table.
+  - `wlog tree <id> [--depth]` task DAG visualization with Unicode borders.
+- **First-run UX**:
+  - `wlog setup` interactive wizard for new installs.
+- **Engine smoke**: `cargo run -p wlog-engine --example synth_one_batch`
+  exercises Tera render + JSON decode without daemon/NATS/Postgres.
+- **Commit hygiene**: `.githooks/commit-msg` rejects em dash anywhere
+  in the message body.
+- **ADR-0008** (CLI UI design system) and **ADR-0009** (diagnostic command
+  family) accepted.
+
 ### Pending for v1.0.0
 
 - 14 consecutive days of recursive dogfood (WienerLog tracking WienerLog).

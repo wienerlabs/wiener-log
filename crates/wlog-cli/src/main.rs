@@ -752,24 +752,11 @@ fn where_cmd() -> ExitCode {
         ("daemon socket", socket.display().to_string()),
         ("cc projects", cc_dir.display().to_string()),
         ("WLOG_NATS_URL", nats),
-        ("WLOG_DATABASE_URL", redact_url(&db)),
+        ("WLOG_DATABASE_URL", ui::redact_url(&db)),
     ];
 
     ui::kv_table(&rows);
     ExitCode::SUCCESS
-}
-
-fn redact_url(raw: &str) -> String {
-    if raw == "<unset>" {
-        return raw.to_string();
-    }
-    if let Some((scheme, rest)) = raw.split_once("://")
-        && let Some(at) = rest.find('@')
-        && let Some((user, _pw)) = rest[..at].split_once(':')
-    {
-        return format!("{scheme}://{user}:***@{}", &rest[at + 1..]);
-    }
-    raw.to_string()
 }
 
 fn home_dir() -> String {
