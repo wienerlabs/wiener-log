@@ -1,19 +1,40 @@
 //! WienerLog storage layer.
 //!
-//! Wraps `sqlx::PgPool` with typed repositories for events, tasks, and edges.
-//! Phase 0 ships the connection bootstrap and migration runner; the
-//! repositories are implemented incrementally per Phase 0 sprint backlog.
+//! Wraps `sqlx::PgPool` with typed repositories for workspaces, users,
+//! tasks, edges, and events. Migrations live under `migrations/` and are
+//! embedded into the binary at compile time.
 
 #![warn(missing_docs)]
+
+mod db_types;
+mod edge;
+mod event;
+mod task;
+mod user;
+mod workspace;
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{Executor, PgPool};
 use thiserror::Error;
 
-/// Storage layer errors. Wraps `sqlx::Error` so callers do not depend on the
-/// driver crate directly.
+pub use edge::EdgeRepo;
+pub use event::EventRepo;
+pub use task::{NewTask, TaskListFilter, TaskRepo};
+pub use user::{NewUser, UserRepo};
+pub use workspace::{NewWorkspace, WorkspaceRepo};
+
+/// Storage layer errors.
 #[derive(Debug, Error)]
 pub enum StorageError {
+    /// Row not found for the requested key.
+    #[error("not found")]
+    NotFound,
+    /// Caller-supplied value violates a domain rule.
+    #[error("invalid input: {0}")]
+    Invalid(String),
+    /// Unknown enum or status string returned by the database.
+    #[error("unknown enum value: {0}")]
+    UnknownEnum(String),
     /// Underlying database error.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -34,13 +55,13 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            url: "postgres://wlog:wlog@localhost:5432/wlog".to_string(),
+            url: "postgres://wlog:wlog@localhost:5435/wlog".to_string(),
             max_connections: 10,
         }
     }
 }
 
-/// Open a pool and run migrations.
+/// Open a pool against the configured Postgres.
 pub async fn connect(config: &StorageConfig) -> Result<PgPool, StorageError> {
     let options: PgConnectOptions = config.url.parse()?;
     let pool = PgPoolOptions::new()
@@ -50,8 +71,7 @@ pub async fn connect(config: &StorageConfig) -> Result<PgPool, StorageError> {
     Ok(pool)
 }
 
-/// Run pending migrations. Migrations live under `migrations/` in the
-/// workspace root and are embedded into the binary at build time.
+/// Run pending migrations.
 pub async fn migrate(pool: &PgPool) -> Result<(), StorageError> {
     sqlx::migrate!("../../migrations").run(pool).await?;
     Ok(())

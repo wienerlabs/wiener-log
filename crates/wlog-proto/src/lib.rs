@@ -12,7 +12,9 @@ pub mod event;
 pub mod task;
 
 pub use event::{Event, EventKind, EventSource};
-pub use task::{EdgeType, NodeType, TaskId, TaskNode, TaskStatus, WorkspaceId};
+pub use task::{
+    Edge, EdgeId, EdgeType, NodeType, TaskId, TaskNode, TaskStatus, UserId, WorkspaceId,
+};
 
 /// Crate version, exposed for diagnostics and prompt provenance.
 pub const PROTO_VERSION: &str = env!("CARGO_PKG_VERSION");

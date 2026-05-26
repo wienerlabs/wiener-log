@@ -64,6 +64,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://wlog:wlog@localhost:5432/wlog
+      WLOG_TEST_DATABASE_URL: postgres://wlog:wlog@localhost:5432/wlog
       NATS_URL: nats://localhost:4222
     steps:
       - uses: actions/checkout@v4
@@ -71,8 +72,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install nextest
         uses: taiki-e/install-action@nextest
-      - name: Run tests
+      - name: Run unit tests
         run: cargo nextest run --workspace --no-fail-fast
+      - name: Run integration tests
+        run: cargo nextest run --workspace --no-fail-fast --run-ignored ignored-only
       - name: Run doctests
         run: cargo test --workspace --doc
 

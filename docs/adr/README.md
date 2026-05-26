@@ -29,6 +29,8 @@ decision land as `### Updates` sections appended at the bottom.
 | [0000](0000-license.md) | License | Accepted | 2026-05-26 |
 | [0001](0001-rust-as-primary-language.md) | Rust as primary language | Accepted | 2026-05-26 |
 | [0002](0002-public-repository-and-branch-protection.md) | Public repository flip and branch protection | Accepted | 2026-05-26 |
+| [0003](0003-task-dag-schema.md) | Task DAG schema design | Accepted | 2026-05-26 |
+| [0004](0004-embedding-model.md) | Embedding model and dimensionality | Accepted | 2026-05-26 |
 
 ## Numbering
 
@@ -43,8 +45,6 @@ not earlier:
 
 | ID | Topic | Expected phase |
 | --- | --- | --- |
-| 0003 | Task DAG schema design | Phase 0 |
-| 0004 | Embedding model + dimensionality | Phase 0 |
 | 0005 | LLM client crate selection | Phase 1 |
 | 0006 | Prompt versioning strategy | Phase 1 |
 | 0007 | NATS subject hierarchy | Phase 1 |
