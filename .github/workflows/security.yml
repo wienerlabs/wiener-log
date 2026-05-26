@@ -20,7 +20,7 @@ jobs:
     name: cargo-audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -29,7 +29,7 @@ jobs:
     name: cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check bans licenses sources advisories
@@ -39,8 +39,13 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v5
+=======
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v4
+>>>>>>> 822a01a (ci(deps): bump actions/checkout from 4 to 6)
         with:
           fail-on-severity: high
 
@@ -48,8 +53,13 @@ jobs:
     name: CodeQL
     runs-on: ubuntu-latest
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v4
+=======
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v3
+>>>>>>> 822a01a (ci(deps): bump actions/checkout from 4 to 6)
         with:
           languages: rust
       - uses: github/codeql-action/analyze@v4
