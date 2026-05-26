@@ -68,11 +68,11 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
 pgvector = { version = "0.4", features = ["sqlx"] }
 
 # Messaging
-async-nats = "0.40"
+async-nats = "0.49"
 
 # Templating
 tera = "1.20"
@@ -82,7 +82,7 @@ config = { version = "0.15", default-features = false, features = ["toml"] }
 
 # Crypto / hashing
 sha2 = "0.11"
-hmac = "0.12"
+hmac = "0.13"
 hex = "0.4"
 
 # Test

@@ -1,7 +1,7 @@
 //! Task repository.
 
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, QueryBuilder};
+use sqlx::{AssertSqlSafe, PgPool, QueryBuilder};
 use wlog_proto::{NodeType, TaskId, TaskNode, TaskStatus, UserId, WorkspaceId};
 
 use crate::StorageError;
@@ -121,7 +121,11 @@ impl TaskRepo {
 
     /// Fetch by primary key.
     pub async fn get(&self, id: TaskId) -> Result<TaskNode, StorageError> {
-        let row: TaskRow = sqlx::query_as(&format!("{SELECT_TASK} WHERE id = $1"))
+        // The SQL is built from compile-time constants only, so wrapping
+        // in `AssertSqlSafe` is sound. sqlx 0.9 demands the assertion to
+        // discourage accidental dynamic SQL.
+        let sql = format!("{SELECT_TASK} WHERE id = $1");
+        let row: TaskRow = sqlx::query_as(AssertSqlSafe(sql))
             .bind(id.0)
             .fetch_optional(&self.pool)
             .await?
@@ -195,13 +199,12 @@ impl TaskRepo {
                 new_status.as_str()
             )));
         }
-        let row: TaskRow = sqlx::query_as(&format!(
-            "UPDATE tasks SET status = $1 WHERE id = $2 RETURNING {TASK_COLUMNS}"
-        ))
-        .bind(new_status.as_str())
-        .bind(id.0)
-        .fetch_one(&self.pool)
-        .await?;
+        let sql = format!("UPDATE tasks SET status = $1 WHERE id = $2 RETURNING {TASK_COLUMNS}");
+        let row: TaskRow = sqlx::query_as(AssertSqlSafe(sql))
+            .bind(new_status.as_str())
+            .bind(id.0)
+            .fetch_one(&self.pool)
+            .await?;
         row.into_node()
     }
 
@@ -217,15 +220,16 @@ impl TaskRepo {
                 "title must be 1..=280 characters".into(),
             ));
         }
-        let row: TaskRow = sqlx::query_as(&format!(
+        let sql = format!(
             "UPDATE tasks SET title = $1, body = $2 WHERE id = $3 RETURNING {TASK_COLUMNS}"
-        ))
-        .bind(title)
-        .bind(body)
-        .bind(id.0)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(StorageError::NotFound)?;
+        );
+        let row: TaskRow = sqlx::query_as(AssertSqlSafe(sql))
+            .bind(title)
+            .bind(body)
+            .bind(id.0)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(StorageError::NotFound)?;
         row.into_node()
     }
 }
