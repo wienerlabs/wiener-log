@@ -14,8 +14,8 @@ const LOGO_LINES: &[&str] = &[
 const TAGLINE: &str = "  Activity-aware task synthesis. The system watches; you confirm.";
 const FOOTER: &str = "  Wiener Labs  ·  AGPL-3.0  ·  https://github.com/wienerlabs/wienerlog";
 
-const FG_BLACK: &str = "\x1b[38;5;232m";
-const BG_CREAM: &str = "\x1b[48;5;230m";
+const FG_BLACK: &str = "\x1b[38;2;14;14;14m";
+const BG_CREAM: &str = "\x1b[48;2;255;244;221m";
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
