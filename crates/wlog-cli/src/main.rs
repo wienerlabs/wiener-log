@@ -2,8 +2,7 @@
 
 #![warn(missing_docs)]
 
-mod config;
-mod output;
+use wlog_cli::{config, daemon, output};
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -19,8 +18,8 @@ use wlog_storage::{
     TaskRepo, UserRepo, WorkspaceRepo, connect, healthcheck, migrate,
 };
 
-use crate::config::{Config, ConfigError, StorageSection, WorkspaceConfig};
-use crate::output::Format;
+use self::config::{Config, ConfigError, StorageSection, WorkspaceConfig};
+use self::output::Format;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -117,11 +116,35 @@ enum Command {
         #[command(subcommand)]
         action: HooksAction,
     },
+    /// Run or inspect the long-lived ingestion coordinator.
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
     /// Print a shell completion script.
     Completions {
         /// Target shell.
         #[arg(value_enum)]
         shell: Shell,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum DaemonAction {
+    /// Run the daemon in the foreground until Ctrl-C.
+    Run {
+        /// Override the default socket path (XDG_RUNTIME_DIR/wlog.sock).
+        #[arg(long, env = "WLOG_SOCKET")]
+        socket: Option<PathBuf>,
+        /// NATS URL; if unset the daemon just logs incoming payloads.
+        #[arg(long, env = "WLOG_NATS_URL")]
+        nats_url: Option<String>,
+    },
+    /// Print whether a daemon socket currently exists.
+    Status {
+        /// Override the default socket path.
+        #[arg(long, env = "WLOG_SOCKET")]
+        socket: Option<PathBuf>,
     },
 }
 
@@ -208,7 +231,45 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             reason,
         } => ack(cli.config.as_deref(), id, edit, reject, reason).await,
         Command::Hooks { action } => Ok(hooks(action)),
+        Command::Daemon { action } => daemon_cmd(action).await,
         Command::Completions { shell } => Ok(completions(shell)),
+    }
+}
+
+async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
+    use std::sync::Arc;
+
+    use tokio::sync::Notify;
+
+    match action {
+        DaemonAction::Run { socket, nats_url } => {
+            let socket = socket.unwrap_or_else(wlog_ingest_git::default_socket_path);
+            let config = daemon::DaemonConfig {
+                socket: socket.clone(),
+                nats_url,
+            };
+            let shutdown = Arc::new(Notify::new());
+            let shutdown_signal = Arc::clone(&shutdown);
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    tracing::info!("ctrl-c received");
+                    shutdown_signal.notify_waiters();
+                }
+            });
+            let accepted = daemon::run(config, shutdown).await?;
+            tracing::info!(accepted, "daemon shut down cleanly");
+            Ok(ExitCode::SUCCESS)
+        }
+        DaemonAction::Status { socket } => {
+            let socket = socket.unwrap_or_else(wlog_ingest_git::default_socket_path);
+            if socket.exists() {
+                println!("listening at {}", socket.display());
+                Ok(ExitCode::SUCCESS)
+            } else {
+                println!("no daemon socket at {}", socket.display());
+                Ok(ExitCode::from(2))
+            }
+        }
     }
 }
 
@@ -265,15 +326,78 @@ fn hooks(action: HooksAction) -> ExitCode {
                 ExitCode::from(1)
             }
         },
-        HooksAction::Notify { kind, args } => {
-            // Phase 1 issue #26 wires this to the local socket and NATS.
-            // Until then we log to stderr (info level by default
-            // suppressed) and return success so the hook never blocks
-            // the commit.
-            tracing::info!(kind = %kind, args = ?args, "hook notify (stub)");
+        HooksAction::Notify { kind, args } => notify(kind, args),
+    }
+}
+
+/// Capture the git context, build a [`HookPayload`], and write it to the
+/// local daemon socket. Designed to never fail the user's commit:
+///
+/// - Anything goes wrong, return `ExitCode::SUCCESS` and log at debug.
+/// - The hook stays out of the developer's way.
+///
+/// When `WLOG_HOOKS_NOTIFY_STRICT=1` is set we surface errors instead;
+/// integration tests rely on that to assert the wire path.
+fn notify(kind: String, args: Vec<String>) -> ExitCode {
+    let payload = wlog_ingest_git::HookPayload {
+        kind,
+        cwd: std::env::current_dir().map_or_else(|_| String::new(), |p| p.display().to_string()),
+        args,
+        repo_remote: git_remote_url(),
+        head_sha: git_head_sha(),
+        branch: git_current_branch(),
+        emitted_at: chrono::Utc::now(),
+    };
+    let socket = std::env::var("WLOG_SOCKET").map_or_else(
+        |_| wlog_ingest_git::default_socket_path(),
+        std::path::PathBuf::from,
+    );
+    match wlog_ingest_git::write_payload(&socket, &payload) {
+        Ok(()) => {
+            tracing::debug!(kind = %payload.kind, socket = %socket.display(), "hook notify sent");
             ExitCode::SUCCESS
         }
+        Err(e) => {
+            tracing::debug!(
+                kind = %payload.kind,
+                socket = %socket.display(),
+                error = %e,
+                "hook notify failed (silenced)"
+            );
+            if std::env::var_os("WLOG_HOOKS_NOTIFY_STRICT").is_some_and(|v| !v.is_empty()) {
+                eprintln!("error: hook notify failed: {e}");
+                ExitCode::from(1)
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
     }
+}
+
+fn git_command(args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new("git").args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8(output.stdout).ok()?;
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn git_head_sha() -> Option<String> {
+    git_command(&["rev-parse", "HEAD"])
+}
+
+fn git_current_branch() -> Option<String> {
+    git_command(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| b != "HEAD")
+}
+
+fn git_remote_url() -> Option<String> {
+    git_command(&["config", "--get", "remote.origin.url"])
 }
 
 fn completions(shell: Shell) -> ExitCode {

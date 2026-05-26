@@ -11,4 +11,5 @@ pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod calibration;
 pub mod dispatch;
+pub mod llm;
 pub mod synth;

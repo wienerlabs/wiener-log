@@ -4529,11 +4529,16 @@ name = "wlog-cli"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-nats",
+ "async-trait",
  "chrono",
  "clap",
  "clap_complete",
+ "futures",
  "serde",
  "serde_json",
+ "tempdir",
+ "testcontainers 0.23.3",
  "thiserror 2.0.18",
  "tokio",
  "toml",

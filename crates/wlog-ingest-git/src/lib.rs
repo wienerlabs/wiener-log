@@ -1,21 +1,26 @@
 //! Git ingestion library.
 //!
-//! Phase 1 scope: install, uninstall, and status of repository hooks that
-//! emit JSON events to a local socket. The daemon side (socket reader +
-//! NATS publisher) lands in the same phase as a separate module.
+//! Two surfaces:
 //!
-//! Hook scripts are tiny: they shell out to `wlog hooks notify <kind>`
-//! which publishes a JSON envelope to `${XDG_RUNTIME_DIR}/wlog.sock`.
-//! The script carries a header comment identifying the wlog version that
-//! wrote it so that `uninstall` can refuse to remove third-party hooks.
+//! 1. Hook lifecycle: install, uninstall, status, render_script.
+//! 2. Socket protocol: hook scripts call `wlog hooks notify` which
+//!    writes a [`socket::HookPayload`] to a Unix socket; the daemon
+//!    reads, enriches, and forwards to NATS.
+//!
+//! Hook scripts carry a `# wlog-managed hook v<version>` header so
+//! that `uninstall` can refuse to remove third-party hooks.
 
 #![warn(missing_docs)]
+
+pub mod socket;
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
+
+pub use socket::{HookPayload, default_socket_path, write_payload};
 
 /// Crate version, surfaced in logs and in the hook script header.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
