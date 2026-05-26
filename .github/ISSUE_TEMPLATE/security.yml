@@ -1,0 +1,36 @@
+name: Security checklist (non-sensitive)
+description: Track a public-facing security task (hardening, audit follow-up). For vulnerability reports, use the private security advisory instead.
+labels: ["security", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not** file an active vulnerability here. Use the
+        [private advisory](https://github.com/wienerlabs/wienerlog/security/advisories/new)
+        instead. This form is for tracking hardening work, audit follow-ups,
+        and security-adjacent improvements that are safe to discuss in public.
+  - type: input
+    attributes:
+      label: Topic
+      placeholder: "Rotate webhook HMAC keys"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Severity
+      options:
+        - Low
+        - Medium
+        - High
+    validations:
+      required: true

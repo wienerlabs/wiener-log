@@ -1,0 +1,56 @@
+name: Bug report
+description: Something is broken and we need to fix it.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. The more concrete you
+        can be, the faster we can reproduce and fix.
+  - type: input
+    attributes:
+      label: WienerLog version or commit
+      description: Output of `wlog --version` or the commit SHA you built from.
+      placeholder: "v0.0.1 or 1a2b3c4"
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Affected component
+      multiple: true
+      options:
+        - CLI (wlog)
+        - Engine (synth / calibration / dispatch)
+        - Storage
+        - Ingest: git
+        - Ingest: Claude Code
+        - Ingest: GitHub
+        - Infra / docker-compose
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Describe the buggy behavior.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Logs and environment
+      description: Relevant `tracing` output, OS, Rust toolchain version. Redact secrets.
+      render: text

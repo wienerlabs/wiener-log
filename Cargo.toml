@@ -1,0 +1,123 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/wlog-cli",
+    "crates/wlog-engine",
+    "crates/wlog-storage",
+    "crates/wlog-ingest-git",
+    "crates/wlog-ingest-cc",
+    "crates/wlog-ingest-gh",
+    "crates/wlog-proto",
+    "crates/wlog-testutil",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.95"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/wienerlabs/wienerlog"
+homepage = "https://github.com/wienerlabs/wienerlog"
+authors = ["Wiener Labs <asesenep15@gmail.com>"]
+readme = "README.md"
+
+[workspace.dependencies]
+# Internal crates
+wlog-cli = { path = "crates/wlog-cli", version = "0.0.1" }
+wlog-engine = { path = "crates/wlog-engine", version = "0.0.1" }
+wlog-storage = { path = "crates/wlog-storage", version = "0.0.1" }
+wlog-ingest-git = { path = "crates/wlog-ingest-git", version = "0.0.1" }
+wlog-ingest-cc = { path = "crates/wlog-ingest-cc", version = "0.0.1" }
+wlog-ingest-gh = { path = "crates/wlog-ingest-gh", version = "0.0.1" }
+wlog-proto = { path = "crates/wlog-proto", version = "0.0.1" }
+wlog-testutil = { path = "crates/wlog-testutil", version = "0.0.1" }
+
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+
+# Identifiers
+uuid = { version = "1.11", features = ["v4", "v7", "serde"] }
+
+# Logging and telemetry
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+
+# HTTP
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# Database
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
+pgvector = { version = "0.4", features = ["sqlx"] }
+
+# Messaging
+async-nats = "0.40"
+
+# Templating
+tera = "1.20"
+
+# Config
+config = { version = "0.15", default-features = false, features = ["toml"] }
+
+# Crypto / hashing
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+
+# Test
+insta = { version = "1.41", features = ["yaml", "json"] }
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.12", features = ["postgres"] }
+mockall = "0.13"
+tokio-test = "0.4"
+pretty_assertions = "1.4"
+proptest = "1.6"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+multiple_crate_versions = "allow"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.test]
+opt-level = 1

@@ -1,0 +1,38 @@
+name: Feature
+description: Propose a new capability.
+labels: ["feature", "triage"]
+body:
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: What problem does this solve? Why now?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+      description: User-facing description, CLI commands if applicable.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list of testable conditions.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Phase
+      options:
+        - "Phase 0"
+        - "Phase 1"
+        - "Phase 2"
+        - "Phase 3"
+        - "Phase 4"
+        - "Post-v1"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Out of scope
+      description: What you intentionally do not want included.

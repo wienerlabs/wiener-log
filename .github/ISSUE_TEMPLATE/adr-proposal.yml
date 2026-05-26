@@ -1,0 +1,36 @@
+name: ADR proposal
+description: Propose an architectural decision that warrants a record.
+labels: ["adr", "triage"]
+body:
+  - type: input
+    attributes:
+      label: Working title
+      placeholder: "Embedding model selection"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Context and problem
+      description: Two to four sentences framing the decision.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Options under consideration
+      description: List at least two options. One option is not a decision.
+      placeholder: |
+        1. Option A
+        2. Option B
+        3. Option C
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Decision drivers
+      description: Bullets only.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Tentative recommendation
+      description: Pick one and explain why, briefly. The full ADR will expand this.

@@ -1,0 +1,56 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# sqlx offline
+/.sqlx
+
+# Logs
+*.log
+logs/
+
+# Local environment
+.env
+.env.local
+.env.*.local
+wlog.local.toml
+
+# Editor
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+.zed/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Linux
+*~
+
+# Node (web tooling, Phase 4)
+node_modules/
+dist/
+.next/
+.turbo/
+
+# Coverage
+/coverage
+*.profraw
+tarpaulin-report.html
+
+# Local docker volumes
+/infra/volumes
+docker-compose.override.yml
+
+# Secrets (paranoid)
+*.pem
+*.key
+*.p12
+*credentials*.json
+!**/test_credentials.json

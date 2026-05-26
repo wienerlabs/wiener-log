@@ -1,0 +1,12 @@
+# Default owner for everything.
+*                       @kh0ra
+
+# Architectural decisions need extra eyes (currently still kh0ra,
+# placeholder for when the team grows).
+/docs/adr/              @kh0ra
+
+# Security-sensitive areas.
+/SECURITY.md            @kh0ra
+/.github/workflows/     @kh0ra
+/deny.toml              @kh0ra
+/infra/                 @kh0ra

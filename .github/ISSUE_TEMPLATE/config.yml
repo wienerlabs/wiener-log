@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    url: https://github.com/wienerlabs/wienerlog/security/advisories/new
+    about: Report a security vulnerability privately. Do not file a public issue.
+  - name: Discussions
+    url: https://github.com/wienerlabs/wienerlog/discussions
+    about: For open-ended design questions, propose ideas, or discuss architectural directions.

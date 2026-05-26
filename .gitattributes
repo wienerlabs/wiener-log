@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.rs       text diff=rust
+*.toml     text
+*.yaml     text
+*.yml      text
+*.md       text
+*.sql      text
+*.sh       text eol=lf
+Cargo.lock text -merge linguist-generated
+
+# Binary files
+*.png      binary
+*.jpg      binary
+*.gif      binary
+*.ico      binary

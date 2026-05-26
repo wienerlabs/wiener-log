@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Enforce Conventional Commits 1.0.0.
+# Allowed types: feat, fix, perf, refactor, docs, test, build, ci, chore, revert.
+# Optional scope. Optional ! for breaking changes. Subject must follow.
+
+set -euo pipefail
+
+msg_file="$1"
+first_line="$(head -1 "$msg_file")"
+
+# Skip merge commits, reverts, and fixup/squash commits.
+if [[ "$first_line" =~ ^(Merge|Revert|fixup!|squash!) ]]; then
+    exit 0
+fi
+
+pattern='^(feat|fix|perf|refactor|docs|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .{1,72}$'
+
+if [[ ! "$first_line" =~ $pattern ]]; then
+    cat >&2 <<EOF
+✗ Commit message does not follow Conventional Commits 1.0.0.
+
+  Allowed types: feat, fix, perf, refactor, docs, test, build, ci, chore, revert
+  Format:        <type>(<scope>): <subject>
+  Example:       feat(cli): wlog add accepts repo flag
+  Example:       refactor(storage)!: rename events.kind -> events.event_kind
+
+Received:
+  ${first_line}
+
+See CONTRIBUTING.md for details.
+EOF
+    exit 1
+fi
