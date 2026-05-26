@@ -9,6 +9,14 @@ once it reaches v1.0.0.
 
 ### Added since 0.1.0
 
+- **Web HTML dashboard** at `/`, `/w/:slug`, `/w/:slug/t/:id` with cream-on-ink
+  brand palette, status pills, task count tiles, recent events panel. Static
+  CSS embedded via `include_str!`, JSON API at `/health` + `/workspaces[/...]`
+  preserved alongside.
+- **`wlog admin cost`**: cross-cut rollup of the local cost ledger by purpose,
+  by day, and by model.
+- **`wlog export [--format json|csv]`**: stream tasks to stdout for backup,
+  migration, or reporting. Optional status/repo filters.
 - **CLI banner** (`wlog banner`): ASCII Wiener Labs logo. TTY-aware, NO_COLOR
   + WLOG_COLOR honored, truecolor #fff4dd cream + #0e0e0e foreground.
 - **CLI banner on startup** for `wlog init` and `wlog daemon run`.

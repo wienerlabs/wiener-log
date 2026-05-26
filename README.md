@@ -9,7 +9,8 @@
 [![Security audit](https://github.com/wienerlabs/wienerlog/actions/workflows/security.yml/badge.svg)](https://github.com/wienerlabs/wienerlog/actions/workflows/security.yml)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-orange)](rust-toolchain.toml)
-[![ADRs](https://img.shields.io/badge/ADRs-8-purple)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-10-purple)](docs/adr/)
+[![Subcommands](https://img.shields.io/badge/wlog%20cmds-26-orange)](crates/wlog-cli/src/main.rs)
 [![Phase](https://img.shields.io/badge/v0.1.0-dogfood--ready-brightgreen)](CHANGELOG.md)
 
 </div>

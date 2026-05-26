@@ -256,6 +256,21 @@ enum Command {
         #[arg(long, default_value_t = 8)]
         depth: usize,
     },
+    /// Export tasks to JSON or CSV on stdout.
+    Export {
+        /// Output format.
+        #[arg(long, value_enum, default_value_t = ExportFormat::Json)]
+        format: ExportFormat,
+        /// Filter by status.
+        #[arg(long)]
+        status: Option<String>,
+        /// Filter by repository.
+        #[arg(long)]
+        repo: Option<String>,
+        /// Maximum rows.
+        #[arg(long, default_value_t = 1000)]
+        limit: i64,
+    },
     /// Run an extended health check (status + version + disk + uptime).
     Doctor {
         /// Skip remote probes (NATS + Postgres).
@@ -273,6 +288,12 @@ enum Command {
         #[arg(value_enum)]
         shell: Shell,
     },
+}
+
+#[derive(Debug, Copy, Clone, clap::ValueEnum)]
+enum ExportFormat {
+    Json,
+    Csv,
 }
 
 #[derive(Debug, Subcommand)]
@@ -325,6 +346,15 @@ enum AdminAction {
         /// Print the subject + payload size instead of publishing.
         #[arg(long)]
         dry_run: bool,
+    },
+    /// Cross-workspace LLM cost rollup from the local ledger.
+    Cost {
+        /// Number of days to summarize (inclusive of today, UTC).
+        #[arg(long, default_value_t = 7)]
+        days: u32,
+        /// Ledger root; defaults to `<cwd>/reports/cost`.
+        #[arg(long, env = "WLOG_COST_REPORTS_DIR")]
+        reports_dir: Option<PathBuf>,
     },
 }
 
@@ -484,6 +514,12 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             all_workspaces,
         } => log_cmd(cli.config.as_deref(), limit, kind, all_workspaces).await,
         Command::Tree { id, depth } => tree_cmd(cli.config.as_deref(), id, depth).await,
+        Command::Export {
+            format,
+            status,
+            repo,
+            limit,
+        } => export_cmd(cli.config.as_deref(), format, status, repo, limit).await,
         Command::Admin { action } => admin_cmd(action).await,
         Command::Completions { shell } => Ok(completions(shell)),
     }
@@ -882,7 +918,107 @@ async fn admin_cmd(action: AdminAction) -> Result<ExitCode> {
             limit,
             dry_run,
         } => admin_replay(database_url, nats_url, workspace, limit, dry_run).await,
+        AdminAction::Cost { days, reports_dir } => Ok(admin_cost(days, reports_dir)),
     }
+}
+
+fn admin_cost(days: u32, reports_dir: Option<PathBuf>) -> ExitCode {
+    use std::collections::BTreeMap;
+
+    use wlog_cli::ui;
+    use wlog_engine::cost::CostLedger;
+
+    let root = reports_dir.unwrap_or_else(|| PathBuf::from("reports/cost"));
+    let ledger = CostLedger::new(root.clone());
+    let today = chrono::Utc::now().date_naive();
+
+    let mut per_purpose: BTreeMap<String, (u64, f64)> = BTreeMap::new();
+    let mut per_model: BTreeMap<String, (u64, u64, u64, u64, f64)> = BTreeMap::new();
+    let mut per_day: Vec<(chrono::NaiveDate, u64, f64)> = Vec::new();
+    let mut grand_total = 0.0f64;
+    let mut total_rows = 0u64;
+
+    for offset in (0..i64::from(days)).rev() {
+        let date = today - chrono::Duration::days(offset);
+        let entries = match ledger.read_day(date) {
+            Ok(e) => e,
+            Err(e) => {
+                ui::error(format!("read {date}: {e}"));
+                return ExitCode::from(1);
+            }
+        };
+        let mut day_total = 0.0f64;
+        for entry in &entries {
+            grand_total += entry.usd;
+            day_total += entry.usd;
+            total_rows += 1;
+            let purpose = entry.purpose.clone();
+            let p_row = per_purpose.entry(purpose).or_insert((0, 0.0));
+            p_row.0 += 1;
+            p_row.1 += entry.usd;
+
+            let mrow = per_model
+                .entry(entry.usage.model.clone())
+                .or_insert((0, 0, 0, 0, 0.0));
+            mrow.0 += u64::from(entry.usage.input_tokens);
+            mrow.1 += u64::from(entry.usage.output_tokens);
+            mrow.2 += u64::from(entry.usage.cache_creation_input_tokens);
+            mrow.3 += u64::from(entry.usage.cache_read_input_tokens);
+            mrow.4 += entry.usd;
+        }
+        per_day.push((date, entries.len() as u64, day_total));
+    }
+
+    ui::banner_heading("admin cost (rollup)");
+    ui::kv("ledger", root.display());
+    ui::kv("window", format!("last {days} days (UTC)"));
+    ui::kv("rows", total_rows);
+    ui::kv("USD", format!("{grand_total:.4}"));
+
+    ui::section("per purpose");
+    if per_purpose.is_empty() {
+        println!("  {}", ui::dim("(empty)"));
+    } else {
+        let mut table = ui::table(&["PURPOSE", "ROWS", "USD"]);
+        for (purpose, (rows, usd)) in &per_purpose {
+            table.add_row(vec![purpose.clone(), rows.to_string(), format!("{usd:.4}")]);
+        }
+        println!("{table}");
+    }
+
+    ui::section("per day");
+    if per_day.iter().all(|(_, r, _)| *r == 0) {
+        println!("  {}", ui::dim("(empty)"));
+    } else {
+        let mut table = ui::table(&["DATE", "ROWS", "USD"]);
+        for (date, rows, usd) in &per_day {
+            table.add_row(vec![
+                date.format("%Y-%m-%d").to_string(),
+                rows.to_string(),
+                format!("{usd:.4}"),
+            ]);
+        }
+        println!("{table}");
+    }
+
+    ui::section("per model");
+    if per_model.is_empty() {
+        println!("  {}", ui::dim("(empty)"));
+    } else {
+        let mut table = ui::table(&["MODEL", "INPUT", "OUTPUT", "CACHE_W", "CACHE_R", "USD"]);
+        for (model, (i, o, cw, cr, usd)) in &per_model {
+            table.add_row(vec![
+                model.clone(),
+                i.to_string(),
+                o.to_string(),
+                cw.to_string(),
+                cr.to_string(),
+                format!("{usd:.4}"),
+            ]);
+        }
+        println!("{table}");
+    }
+    ExitCode::SUCCESS
 }
 
 fn resolve_admin_db_url(explicit: Option<String>) -> Result<String> {
@@ -1029,6 +1165,92 @@ async fn tree_cmd(
     )
     .await?;
     Ok(ExitCode::SUCCESS)
+}
+
+async fn export_cmd(
+    config_path: Option<&std::path::Path>,
+    format: ExportFormat,
+    status: Option<String>,
+    repo: Option<String>,
+    limit: i64,
+) -> Result<ExitCode> {
+    use std::io::Write as _;
+    use wlog_cli::ui;
+
+    let loaded = match config::load(config_path) {
+        Ok(l) => l,
+        Err(ConfigError::NotFound) => {
+            ui::error("no wlog.toml; run `wlog init`");
+            return Ok(ExitCode::from(1));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: 2,
+    })
+    .await?;
+
+    let status_parsed = match status.as_deref() {
+        Some(s) => match wlog_proto::TaskStatus::parse(s) {
+            Some(p) => Some(p),
+            None => {
+                ui::error(format!("unknown status `{s}`"));
+                return Ok(ExitCode::from(2));
+            }
+        },
+        None => None,
+    };
+
+    let tasks = TaskRepo::new(pool)
+        .list(
+            loaded.config.workspace.workspace_id(),
+            TaskListFilter {
+                status: status_parsed,
+                repo,
+                owner: None,
+                limit: Some(limit),
+            },
+        )
+        .await?;
+
+    let mut out = std::io::stdout().lock();
+    match format {
+        ExportFormat::Json => {
+            serde_json::to_writer_pretty(&mut out, &tasks)?;
+            writeln!(out)?;
+        }
+        ExportFormat::Csv => {
+            writeln!(
+                out,
+                "id,status,node_type,title,repo,owner,created_at,updated_at"
+            )?;
+            for t in &tasks {
+                writeln!(
+                    out,
+                    "{},{:?},{:?},{},{},{},{},{}",
+                    t.id.0,
+                    t.status,
+                    t.node_type,
+                    csv_field(&t.title),
+                    csv_field(t.repo.as_deref().unwrap_or("")),
+                    t.owner.map_or_else(String::new, |u| u.0.to_string()),
+                    t.created_at.format("%Y-%m-%dT%H:%M:%SZ"),
+                    t.updated_at.format("%Y-%m-%dT%H:%M:%SZ"),
+                )?;
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn csv_field(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        let escaped = s.replace('"', "\"\"");
+        format!("\"{escaped}\"")
+    } else {
+        s.to_string()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
