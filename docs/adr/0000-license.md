@@ -1,4 +1,4 @@
-# 0000 — License
+# 0000: License
 
 - **Status**: Accepted
 - **Date**: 2026-05-26
@@ -33,12 +33,12 @@ explicitly contested; this ADR records why that default stands.
 
 ## Considered Options
 
-1. **AGPL-3.0-or-later** — strong copyleft including network use.
-2. **GPL-3.0-or-later** — strong copyleft but with the well-known SaaS
+1. **AGPL-3.0-or-later**: strong copyleft including network use.
+2. **GPL-3.0-or-later**: strong copyleft but with the well-known SaaS
    loophole.
-3. **Apache-2.0** — permissive with patent grant.
-4. **MIT** — minimal permissive.
-5. **BSL-1.1 (Business Source License)** — Source-Available with a delayed
+3. **Apache-2.0**: permissive with patent grant.
+4. **MIT**: minimal permissive.
+5. **BSL-1.1 (Business Source License)**: Source-Available with a delayed
    conversion to a permissive license.
 
 ## Decision Outcome

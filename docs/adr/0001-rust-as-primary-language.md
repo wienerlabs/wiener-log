@@ -1,4 +1,4 @@
-# 0001 — Rust as primary language
+# 0001: Rust as primary language
 
 - **Status**: Accepted
 - **Date**: 2026-05-26
@@ -30,12 +30,12 @@ polyglot stack from day one, which we want to defer until justified.
 
 ## Considered Options
 
-1. **Rust** — single binaries, strong types, no GC, async via Tokio.
-2. **Go** — fast iteration, single binaries, weaker type system, easier
+1. **Rust**: single binaries, strong types, no GC, async via Tokio.
+2. **Go**: fast iteration, single binaries, weaker type system, easier
    concurrency story.
-3. **TypeScript on Bun or Node** — author's primary daily language for web
+3. **TypeScript on Bun or Node**: author's primary daily language for web
    work, large ecosystem, but daemon ergonomics are weaker.
-4. **Python** — fastest prototyping; rejected for daemon work due to GIL
+4. **Python**: fastest prototyping; rejected for daemon work due to GIL
    and packaging friction.
 
 ## Decision Outcome

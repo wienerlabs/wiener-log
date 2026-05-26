@@ -28,6 +28,7 @@ decision land as `### Updates` sections appended at the bottom.
 | --- | ----- | ------ | ---- |
 | [0000](0000-license.md) | License | Accepted | 2026-05-26 |
 | [0001](0001-rust-as-primary-language.md) | Rust as primary language | Accepted | 2026-05-26 |
+| [0002](0002-public-repository-and-branch-protection.md) | Public repository flip and branch protection | Accepted | 2026-05-26 |
 
 ## Numbering
 
@@ -42,13 +43,13 @@ not earlier:
 
 | ID | Topic | Expected phase |
 | --- | --- | --- |
-| 0002 | Task DAG schema design | Phase 0 |
-| 0003 | LLM client crate selection | Phase 1 |
-| 0004 | Prompt versioning strategy | Phase 1 |
-| 0005 | NATS subject hierarchy | Phase 1 |
-| 0006 | Embedding model + dimensionality | Phase 1 |
-| 0007 | Estimation model (log-normal vs gamma) | Phase 2 |
-| 0008 | Dispatcher decision boundaries | Phase 3 |
-| 0009 | Covenant integration model | Phase 3 |
-| 0010 | Web framework decision retrospective | Phase 4 |
-| 0011 | Solana program reuse vs new program | Phase 4 |
+| 0003 | Task DAG schema design | Phase 0 |
+| 0004 | Embedding model + dimensionality | Phase 0 |
+| 0005 | LLM client crate selection | Phase 1 |
+| 0006 | Prompt versioning strategy | Phase 1 |
+| 0007 | NATS subject hierarchy | Phase 1 |
+| 0008 | Estimation model (log-normal vs gamma) | Phase 2 |
+| 0009 | Dispatcher decision boundaries | Phase 3 |
+| 0010 | Covenant integration model | Phase 3 |
+| 0011 | Web framework decision retrospective | Phase 4 |
+| 0012 | Solana program reuse vs new program | Phase 4 |

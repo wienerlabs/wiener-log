@@ -9,7 +9,7 @@
 [![Security audit](https://github.com/wienerlabs/wienerlog/actions/workflows/security.yml/badge.svg)](https://github.com/wienerlabs/wienerlog/actions/workflows/security.yml)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-orange)](rust-toolchain.toml)
-[![ADRs](https://img.shields.io/badge/ADRs-2-purple)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-3-purple)](docs/adr/)
 [![Phase](https://img.shields.io/badge/phase--1-genesis-lightgrey)](docs/adr/)
 
 </div>
@@ -103,8 +103,9 @@ in the GitHub Projects board and is summarized below.
 All non-obvious architectural decisions are recorded in
 [`docs/adr/`](docs/adr/). Two ADRs ship with the genesis commit:
 
-- [ADR-0000: License](docs/adr/0000-license.md) — why AGPL-3.0-or-later.
-- [ADR-0001: Primary language](docs/adr/0001-rust-as-primary-language.md) — why Rust.
+- [ADR-0000: License](docs/adr/0000-license.md): why AGPL-3.0-or-later.
+- [ADR-0001: Primary language](docs/adr/0001-rust-as-primary-language.md): why Rust.
+- [ADR-0002: Public repository + branch protection](docs/adr/0002-public-repository-and-branch-protection.md): why public, and the ruleset on `main`.
 
 ## Contributing
 
