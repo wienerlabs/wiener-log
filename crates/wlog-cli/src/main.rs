@@ -180,11 +180,63 @@ enum Command {
     },
     /// Print the Wiener Labs ASCII banner.
     Banner,
+    /// Local diagnostic: daemon socket, NATS round-trip, Postgres, hooks.
+    Status {
+        /// Skip the NATS round-trip probe.
+        #[arg(long)]
+        no_nats: bool,
+        /// Skip the Postgres `SELECT 1` probe.
+        #[arg(long)]
+        no_db: bool,
+        /// NATS URL override.
+        #[arg(long, env = "WLOG_NATS_URL")]
+        nats_url: Option<String>,
+    },
+    /// Operator surface for cross-workspace queries (founder-only).
+    Admin {
+        #[command(subcommand)]
+        action: AdminAction,
+    },
     /// Print a shell completion script.
     Completions {
         /// Target shell.
         #[arg(value_enum)]
         shell: Shell,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AdminAction {
+    /// List every user across every workspace.
+    Users {
+        /// Database URL (`WLOG_ADMIN_DATABASE_URL` falls back to
+        /// `WLOG_DATABASE_URL`).
+        #[arg(long, env = "WLOG_ADMIN_DATABASE_URL")]
+        database_url: Option<String>,
+        /// Maximum rows.
+        #[arg(long, default_value_t = 200)]
+        limit: i64,
+    },
+    /// List every workspace on the Postgres backend.
+    Workspaces {
+        /// Database URL.
+        #[arg(long, env = "WLOG_ADMIN_DATABASE_URL")]
+        database_url: Option<String>,
+        /// Maximum rows.
+        #[arg(long, default_value_t = 200)]
+        limit: i64,
+    },
+    /// Subscribe to `wlog.>` and print every event in real time.
+    Tail {
+        /// NATS URL.
+        #[arg(long, env = "WLOG_NATS_URL", default_value = "nats://127.0.0.1:4222")]
+        nats_url: String,
+        /// Override the subject filter (`wlog.>` by default).
+        #[arg(long, default_value = "wlog.>")]
+        subject: String,
+        /// Truncate each payload body to N bytes when printing.
+        #[arg(long, default_value_t = 240)]
+        max_body: usize,
     },
 }
 
@@ -323,6 +375,12 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         Command::Daemon { action } => daemon_cmd(action).await,
         Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
         Command::Banner => Ok(banner_cmd()),
+        Command::Status {
+            no_nats,
+            no_db,
+            nats_url,
+        } => status_cmd(cli.config.as_deref(), no_nats, no_db, nats_url).await,
+        Command::Admin { action } => admin_cmd(action).await,
         Command::Completions { shell } => Ok(completions(shell)),
     }
 }
@@ -331,6 +389,285 @@ fn banner_cmd() -> ExitCode {
     let mut stdout = std::io::stdout().lock();
     let _ = banner::print_banner(&mut stdout, banner::should_color());
     ExitCode::SUCCESS
+}
+
+async fn status_cmd(
+    config_path: Option<&std::path::Path>,
+    no_nats: bool,
+    no_db: bool,
+    nats_url_override: Option<String>,
+) -> Result<ExitCode> {
+    use std::time::Instant;
+
+    println!("wlog status");
+    println!("===========");
+
+    let mut all_ok = true;
+
+    let socket_path = wlog_ingest_git::default_socket_path();
+    let socket_present = socket_path.exists();
+    println!(
+        "{} daemon socket    {}",
+        check_mark(socket_present),
+        socket_path.display()
+    );
+    if !socket_present {
+        all_ok = false;
+        println!("    hint: start the daemon (`wlog daemon run` or systemd/launchd unit)");
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let in_repo = cwd.join(".git").exists();
+    if in_repo {
+        match wlog_ingest_git::status(&cwd) {
+            Ok(report) => {
+                let installed = report
+                    .entries
+                    .iter()
+                    .all(|(_, outcome)| matches!(outcome, wlog_ingest_git::HookAction::Installed));
+                println!(
+                    "{} git hooks        {}",
+                    check_mark(installed),
+                    cwd.display()
+                );
+                if !installed {
+                    all_ok = false;
+                    for (kind, outcome) in &report.entries {
+                        if !matches!(outcome, wlog_ingest_git::HookAction::Installed) {
+                            println!("    {kind:?}: {outcome:?}");
+                        }
+                    }
+                    println!("    hint: `wlog hooks install` from inside the repo");
+                }
+            }
+            Err(e) => {
+                all_ok = false;
+                println!("? git hooks        unable to read ({e})");
+            }
+        }
+    } else {
+        println!("- git hooks        not in a git repo (skipped)");
+    }
+
+    let nats_url = nats_url_override
+        .or_else(|| std::env::var("WLOG_NATS_URL").ok())
+        .unwrap_or_else(|| "nats://127.0.0.1:4222".to_string());
+    if no_nats {
+        println!("- NATS             skipped (--no-nats)");
+    } else {
+        let start = Instant::now();
+        match async_nats::connect(&nats_url).await {
+            Ok(client) => match client.flush().await {
+                Ok(()) => {
+                    let elapsed = start.elapsed();
+                    println!(
+                        "{} NATS             {nats_url} (round-trip {elapsed:?})",
+                        check_mark(true)
+                    );
+                }
+                Err(e) => {
+                    all_ok = false;
+                    println!("{} NATS             flush failed: {e}", check_mark(false));
+                }
+            },
+            Err(e) => {
+                all_ok = false;
+                println!("{} NATS             {nats_url} -> {e}", check_mark(false));
+            }
+        }
+    }
+
+    if no_db {
+        println!("- Postgres         skipped (--no-db)");
+    } else {
+        match config::load(config_path) {
+            Ok(loaded) => {
+                let cfg = StorageConfig {
+                    url: loaded.config.storage.url.clone(),
+                    max_connections: 1,
+                };
+                let url = cfg.url.clone();
+                match connect(&cfg).await {
+                    Ok(pool) => match healthcheck(&pool).await {
+                        Ok(()) => println!("{} Postgres         {url}", check_mark(true)),
+                        Err(e) => {
+                            all_ok = false;
+                            println!(
+                                "{} Postgres         {url} -> healthcheck failed: {e}",
+                                check_mark(false)
+                            );
+                        }
+                    },
+                    Err(e) => {
+                        all_ok = false;
+                        println!(
+                            "{} Postgres         {url} -> connect failed: {e}",
+                            check_mark(false)
+                        );
+                    }
+                }
+            }
+            Err(ConfigError::NotFound) => {
+                println!("- Postgres         no wlog.toml; run `wlog init` (skipped)");
+            }
+            Err(e) => {
+                all_ok = false;
+                println!("{} Postgres         config error: {e}", check_mark(false));
+            }
+        }
+    }
+
+    println!();
+    if all_ok {
+        println!("OK: wlog is healthy on this machine.");
+        Ok(ExitCode::SUCCESS)
+    } else {
+        println!("FAIL: see hints above.");
+        Ok(ExitCode::from(1))
+    }
+}
+
+const fn check_mark(ok: bool) -> &'static str {
+    if ok { "+" } else { "x" }
+}
+
+async fn admin_cmd(action: AdminAction) -> Result<ExitCode> {
+    match action {
+        AdminAction::Users {
+            database_url,
+            limit,
+        } => admin_users(database_url, limit).await,
+        AdminAction::Workspaces {
+            database_url,
+            limit,
+        } => admin_workspaces(database_url, limit).await,
+        AdminAction::Tail {
+            nats_url,
+            subject,
+            max_body,
+        } => admin_tail(nats_url, subject, max_body).await,
+    }
+}
+
+fn resolve_admin_db_url(explicit: Option<String>) -> Result<String> {
+    if let Some(u) = explicit {
+        return Ok(u);
+    }
+    if let Ok(u) = std::env::var("WLOG_ADMIN_DATABASE_URL") {
+        return Ok(u);
+    }
+    if let Ok(u) = std::env::var("WLOG_DATABASE_URL") {
+        return Ok(u);
+    }
+    Err(anyhow!(
+        "no database URL; pass --database-url, WLOG_ADMIN_DATABASE_URL, or WLOG_DATABASE_URL"
+    ))
+}
+
+async fn admin_users(database_url: Option<String>, limit: i64) -> Result<ExitCode> {
+    let url = resolve_admin_db_url(database_url)?;
+    let pool = connect(&StorageConfig {
+        url,
+        max_connections: 2,
+    })
+    .await?;
+    let users = UserRepo::new(pool.clone());
+    let workspaces = WorkspaceRepo::new(pool);
+
+    let ws_index: std::collections::HashMap<_, _> = workspaces
+        .list(1000)
+        .await?
+        .into_iter()
+        .map(|w| (w.id, w.slug))
+        .collect();
+
+    let rows = users.list_all(limit).await?;
+    println!(
+        "{:<24}  {:<22}  {:<32}  {:<20}",
+        "WORKSPACE", "HANDLE", "EMAIL", "CREATED"
+    );
+    println!("{}", "-".repeat(102));
+    for u in &rows {
+        let ws = ws_index
+            .get(&u.workspace_id)
+            .cloned()
+            .unwrap_or_else(|| "<orphan>".to_string());
+        let email = u.email.as_deref().unwrap_or("-");
+        let created = u.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
+        println!(
+            "{ws:<24}  {handle:<22}  {email:<32}  {created:<20}",
+            handle = u.handle
+        );
+    }
+    println!();
+    println!("{} users total", rows.len());
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn admin_workspaces(database_url: Option<String>, limit: i64) -> Result<ExitCode> {
+    let url = resolve_admin_db_url(database_url)?;
+    let pool = connect(&StorageConfig {
+        url,
+        max_connections: 1,
+    })
+    .await?;
+    let workspaces = WorkspaceRepo::new(pool);
+
+    let rows = workspaces.list(limit).await?;
+    println!("{:<24}  {:<36}  {:<20}", "SLUG", "NAME", "CREATED");
+    println!("{}", "-".repeat(82));
+    for w in &rows {
+        let created = w.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
+        println!(
+            "{slug:<24}  {name:<36}  {created:<20}",
+            slug = w.slug,
+            name = w.name
+        );
+    }
+    println!();
+    println!("{} workspaces total", rows.len());
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn admin_tail(nats_url: String, subject: String, max_body: usize) -> Result<ExitCode> {
+    use futures::StreamExt;
+
+    let client = async_nats::connect(&nats_url)
+        .await
+        .with_context(|| format!("connecting to NATS at {nats_url}"))?;
+    let mut sub = client
+        .subscribe(subject.clone())
+        .await
+        .with_context(|| format!("subscribing to {subject}"))?;
+    eprintln!("tailing {subject} on {nats_url} (Ctrl-C to exit)");
+    eprintln!();
+
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut ctrl_c => {
+                eprintln!();
+                eprintln!("interrupted");
+                break;
+            }
+            msg = sub.next() => {
+                let Some(msg) = msg else { break };
+                let ts = chrono::Utc::now().format("%H:%M:%S%.3f");
+                let body_len = msg.payload.len();
+                let body_str = String::from_utf8_lossy(&msg.payload);
+                let trimmed: String = if body_str.len() > max_body {
+                    format!("{}... ({body_len}B)", &body_str[..max_body])
+                } else {
+                    body_str.into_owned()
+                };
+                println!("{ts}  {subject}  {trimmed}", subject = msg.subject);
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 async fn daily(

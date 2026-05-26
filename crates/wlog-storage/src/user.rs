@@ -170,4 +170,35 @@ impl UserRepo {
             })
             .collect())
     }
+
+    /// List every user across every workspace, ordered by created_at
+    /// descending. Used by the operator-facing `wlog admin users` view.
+    pub async fn list_all(&self, limit: i64) -> Result<Vec<User>, StorageError> {
+        let rows = sqlx::query_as::<
+            _,
+            (
+                uuid::Uuid,
+                uuid::Uuid,
+                String,
+                Option<String>,
+                DateTime<Utc>,
+            ),
+        >(
+            "SELECT id, workspace_id, handle, email, created_at \
+                 FROM users ORDER BY created_at DESC LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| User {
+                id: UserId(row.0),
+                workspace_id: WorkspaceId(row.1),
+                handle: row.2,
+                email: row.3,
+                created_at: row.4,
+            })
+            .collect())
+    }
 }
