@@ -81,7 +81,7 @@ config = { version = "0.15", default-features = false, features = ["toml"] }
 
 # Crypto / hashing
 sha2 = "0.10"
-hmac = "0.12"
+hmac = "0.13"
 hex = "0.4"
 
 # Test
