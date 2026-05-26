@@ -2,7 +2,7 @@
 
 #![warn(missing_docs)]
 
-use wlog_cli::{config, daemon, output};
+use wlog_cli::{banner, config, daemon, output};
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -178,6 +178,8 @@ enum Command {
         #[arg(long, env = "WLOG_COST_REPORTS_DIR")]
         reports_dir: Option<PathBuf>,
     },
+    /// Print the Wiener Labs ASCII banner.
+    Banner,
     /// Print a shell completion script.
     Completions {
         /// Target shell.
@@ -320,8 +322,15 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         Command::Hooks { action } => Ok(hooks(action)),
         Command::Daemon { action } => daemon_cmd(action).await,
         Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
+        Command::Banner => Ok(banner_cmd()),
         Command::Completions { shell } => Ok(completions(shell)),
     }
+}
+
+fn banner_cmd() -> ExitCode {
+    let mut stdout = std::io::stdout().lock();
+    let _ = banner::print_banner(&mut stdout, banner::should_color());
+    ExitCode::SUCCESS
 }
 
 async fn daily(

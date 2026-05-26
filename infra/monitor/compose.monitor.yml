@@ -1,0 +1,65 @@
+name: wlog-monitor
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: always
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.listen-address=:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /home/wlog/state/prometheus:/prometheus
+    networks:
+      - default
+
+  loki:
+    image: grafana/loki:3.3.2
+    restart: always
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./loki.yml:/etc/loki/loki.yml:ro
+      - /home/wlog/state/loki:/loki
+    networks:
+      - default
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    restart: always
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin
+      GF_SERVER_ROOT_URL: https://wlog.example.com/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - /home/wlog/state/grafana:/var/lib/grafana
+    secrets:
+      - grafana_admin
+    depends_on:
+      - prometheus
+      - loki
+
+networks:
+  default:
+    name: wlog-prod_default
+    external: true
+
+secrets:
+  grafana_admin:
+    file: /home/wlog/state/secrets/grafana_admin

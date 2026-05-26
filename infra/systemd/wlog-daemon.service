@@ -1,0 +1,30 @@
+[Unit]
+Description=WienerLog ingestion daemon
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=wlog
+Group=wlog
+WorkingDirectory=/home/wlog/wienerlog
+EnvironmentFile=-/home/wlog/state/daemon.env
+ExecStartPre=/usr/bin/docker compose -f infra/hetzner/compose.prod.yml -f infra/monitor/compose.monitor.yml pull --quiet
+ExecStart=/usr/bin/docker compose -f infra/hetzner/compose.prod.yml -f infra/monitor/compose.monitor.yml up
+ExecStop=/usr/bin/docker compose -f infra/hetzner/compose.prod.yml -f infra/monitor/compose.monitor.yml down
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

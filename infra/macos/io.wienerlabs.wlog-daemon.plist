@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.wienerlabs.wlog-daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/wlog</string>
+        <string>daemon</string>
+        <string>run</string>
+        <string>--cc-projects-dir</string>
+        <string>auto</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>WLOG_NATS_URL</key>
+        <string>nats://127.0.0.1:4222</string>
+        <key>WLOG_DAEMON_WORKSPACE</key>
+        <string>local</string>
+        <key>RUST_LOG</key>
+        <string>info</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/wlog/Library/Logs/wlog-daemon.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/wlog/Library/Logs/wlog-daemon.err.log</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
