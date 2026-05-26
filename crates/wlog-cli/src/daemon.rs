@@ -42,6 +42,12 @@ pub struct DaemonConfig {
     /// Where to persist the CC cursor. Defaults to
     /// [`ScannerCursor::default_path`].
     pub cc_cursor_path: Option<PathBuf>,
+    /// TCP listen address for the GH webhook receiver (e.g.
+    /// `127.0.0.1:8787`). When `None`, the GH worker does not start.
+    pub gh_listen: Option<String>,
+    /// HMAC secret for verifying GitHub webhook payloads. Required when
+    /// `gh_listen` is set.
+    pub gh_secret: Option<String>,
 }
 
 /// Counters accumulated across all workers.
@@ -51,6 +57,8 @@ pub struct DaemonStats {
     pub socket_payloads: u64,
     /// CC events forwarded to the sink.
     pub cc_events: u64,
+    /// GH events accepted from the webhook receiver.
+    pub gh_events: u64,
 }
 
 /// Run the daemon until `shutdown` fires. Returns aggregated counters
@@ -66,6 +74,7 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<DaemonSt
 
     let socket_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let cc_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let gh_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut tasks: JoinSet<()> = JoinSet::new();
 
     // Spin up the CC worker if a projects dir was configured.
@@ -81,6 +90,18 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<DaemonSt
             if let Err(e) = run_cc_worker(projects_dir, cursor_path, sink, counter, shutdown).await
             {
                 tracing::warn!(error = %e, "cc worker exited with error");
+            }
+        });
+    }
+
+    // Spin up the GH webhook receiver if configured.
+    if let (Some(listen), Some(secret)) = (config.gh_listen.clone(), config.gh_secret.clone()) {
+        let sink = Arc::clone(&sink);
+        let counter = Arc::clone(&gh_counter);
+        let shutdown = Arc::clone(&shutdown);
+        tasks.spawn(async move {
+            if let Err(e) = run_gh_worker(listen, secret, sink, counter, shutdown).await {
+                tracing::warn!(error = %e, "gh worker exited with error");
             }
         });
     }
@@ -117,7 +138,40 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<DaemonSt
     Ok(DaemonStats {
         socket_payloads: socket_counter.load(std::sync::atomic::Ordering::SeqCst),
         cc_events: cc_counter.load(std::sync::atomic::Ordering::SeqCst),
+        gh_events: gh_counter.load(std::sync::atomic::Ordering::SeqCst),
     })
+}
+
+async fn run_gh_worker(
+    listen: String,
+    secret: String,
+    sink: Arc<dyn PayloadSink>,
+    counter: Arc<std::sync::atomic::AtomicU64>,
+    shutdown: Arc<Notify>,
+) -> Result<()> {
+    use tokio::net::TcpListener;
+
+    let listener = TcpListener::bind(&listen)
+        .await
+        .with_context(|| format!("bind gh listener {listen}"))?;
+    let local_addr = listener.local_addr()?;
+    tracing::info!(%local_addr, "gh webhook receiver listening");
+
+    let adapter: Arc<dyn wlog_ingest_gh::EventSink> = Arc::new(GhSinkAdapter::new(sink, counter));
+    let state = Arc::new(wlog_ingest_gh::RouterState {
+        secret: secret.into_bytes(),
+        replay: wlog_ingest_gh::ReplayCache::default(),
+        sink: adapter,
+    });
+
+    let signal = async move {
+        shutdown.notified().await;
+    };
+    wlog_ingest_gh::serve(listener, state, signal)
+        .await
+        .map_err(|e| anyhow::anyhow!("gh serve: {e}"))?;
+    tracing::info!("gh webhook receiver shut down");
+    Ok(())
 }
 
 async fn run_cc_worker(
@@ -227,9 +281,10 @@ async fn handle_connection(
     Ok(())
 }
 
-/// Anything that can absorb the daemon's inbound events. Two channels:
-/// git hook payloads and Claude Code session events. Implementations
-/// route each channel to the matching ADR-0007 subject prefix.
+/// Anything that can absorb the daemon's inbound events. Three channels:
+/// git hook payloads, Claude Code session events, and GitHub webhook
+/// events. Implementations route each channel to the matching ADR-0007
+/// subject prefix.
 #[async_trait::async_trait]
 pub trait PayloadSink: Send + Sync {
     /// Absorb one git hook payload (`event.git.{kind}`).
@@ -239,6 +294,12 @@ pub trait PayloadSink: Send + Sync {
     /// [`HookPayload`] carries metadata (cwd, session id in args); the
     /// JSON `extras` is the serialized [`CcEvent`].
     async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()>;
+
+    /// Absorb one GitHub webhook event (`event.gh.{subject_suffix}`).
+    /// `subject_suffix` follows ADR-0007 leafs (`pr.opened`,
+    /// `workflow.completed`, `push`, ...).
+    async fn accept_gh(&self, subject_suffix: String, event: wlog_ingest_gh::GhEvent)
+    -> Result<()>;
 }
 
 /// Logging sink used when no NATS URL is configured. Useful in tests
@@ -247,6 +308,7 @@ pub trait PayloadSink: Send + Sync {
 pub struct LoggingSink {
     git: tokio::sync::Mutex<Vec<HookPayload>>,
     cc: tokio::sync::Mutex<Vec<(HookPayload, serde_json::Value)>>,
+    gh: tokio::sync::Mutex<Vec<(String, wlog_ingest_gh::GhEvent)>>,
 }
 
 impl LoggingSink {
@@ -261,6 +323,12 @@ impl LoggingSink {
     pub async fn cc_snapshot(&self) -> Vec<(HookPayload, serde_json::Value)> {
         self.cc.lock().await.clone()
     }
+
+    /// Borrow the accumulated GH events (test helper).
+    #[allow(dead_code, reason = "consumed by integration tests only")]
+    pub async fn gh_snapshot(&self) -> Vec<(String, wlog_ingest_gh::GhEvent)> {
+        self.gh.lock().await.clone()
+    }
 }
 
 #[async_trait::async_trait]
@@ -274,6 +342,16 @@ impl PayloadSink for LoggingSink {
     async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()> {
         tracing::info!(kind = %payload.kind, "cc event");
         self.cc.lock().await.push((payload, extras));
+        Ok(())
+    }
+
+    async fn accept_gh(
+        &self,
+        subject_suffix: String,
+        event: wlog_ingest_gh::GhEvent,
+    ) -> Result<()> {
+        tracing::info!(suffix = %subject_suffix, "gh event");
+        self.gh.lock().await.push((subject_suffix, event));
         Ok(())
     }
 }
@@ -338,5 +416,46 @@ impl PayloadSink for NatsSink {
         let subject = format!("wlog.{}.event.cc.{kind}", self.workspace);
         let body = serde_json::to_vec(&extras)?;
         self.publish(subject, body).await
+    }
+
+    async fn accept_gh(
+        &self,
+        subject_suffix: String,
+        event: wlog_ingest_gh::GhEvent,
+    ) -> Result<()> {
+        let subject = format!("wlog.{}.event.gh.{subject_suffix}", self.workspace);
+        let body = serde_json::to_vec(&event)?;
+        self.publish(subject, body).await
+    }
+}
+
+/// Adapter that lets the GH router publish through our [`PayloadSink`].
+pub struct GhSinkAdapter {
+    inner: Arc<dyn PayloadSink>,
+    counter: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl GhSinkAdapter {
+    /// Wrap an existing sink.
+    pub const fn new(
+        inner: Arc<dyn PayloadSink>,
+        counter: Arc<std::sync::atomic::AtomicU64>,
+    ) -> Self {
+        Self { inner, counter }
+    }
+}
+
+#[async_trait::async_trait]
+impl wlog_ingest_gh::EventSink for GhSinkAdapter {
+    async fn accept_gh(&self, event: wlog_ingest_gh::GhEvent) -> Result<(), String> {
+        let suffix = event.subject_suffix();
+        match self.inner.accept_gh(suffix, event).await {
+            Ok(()) => {
+                self.counter
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }
+            Err(e) => Err(e.to_string()),
+        }
     }
 }

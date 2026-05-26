@@ -57,6 +57,8 @@ async fn daemon_cc_worker_publishes_session_events() -> Result<()> {
         nats_url: Some(nats_url.clone()),
         cc_projects_dir: Some(projects.clone()),
         cc_cursor_path: Some(cursor.clone()),
+        gh_listen: None,
+        gh_secret: None,
     };
     let shutdown = Arc::new(Notify::new());
     let daemon_shutdown = Arc::clone(&shutdown);

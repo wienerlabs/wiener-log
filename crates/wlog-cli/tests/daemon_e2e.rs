@@ -48,6 +48,8 @@ async fn daemon_publishes_hook_payloads_to_nats() -> Result<()> {
         nats_url: Some(nats_url.clone()),
         cc_projects_dir: None,
         cc_cursor_path: None,
+        gh_listen: None,
+        gh_secret: None,
     };
     let shutdown = Arc::new(Notify::new());
 

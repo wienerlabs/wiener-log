@@ -108,6 +108,9 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 doc_markdown = "allow"
 multiple_crate_versions = "allow"
+# Clippy suggests from_mins/hours/days (the `duration_constructors` API)
+# but those are unstable on MSRV 1.95. Allow until they stabilize.
+duration_suboptimal_units = "allow"
 
 [profile.release]
 opt-level = 3

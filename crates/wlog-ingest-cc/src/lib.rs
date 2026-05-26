@@ -29,7 +29,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// One event drawn from a Claude Code session transcript. The
 /// discriminator (`kind`) maps directly to the wire string used in
 /// `wlog.{workspace}.event.cc.{kind}` per ADR-0007.
-#[allow(clippy::enum_variant_names, reason = "every variant is, by definition, a session event")]
+#[allow(
+    clippy::enum_variant_names,
+    reason = "every variant is, by definition, a session event"
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CcEvent {

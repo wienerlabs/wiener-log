@@ -21,6 +21,7 @@ wlog-storage.workspace = true
 wlog-engine.workspace = true
 wlog-ingest-git.workspace = true
 wlog-ingest-cc.workspace = true
+wlog-ingest-gh.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true
@@ -45,3 +46,4 @@ anyhow.workspace = true
 futures.workspace = true
 tempdir = "0.3"
 serde_json.workspace = true
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json"] }

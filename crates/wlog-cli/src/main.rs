@@ -155,6 +155,13 @@ enum DaemonAction {
         /// Override the CC cursor location.
         #[arg(long, env = "WLOG_CC_CURSOR")]
         cc_cursor: Option<PathBuf>,
+        /// TCP listen address for the GitHub webhook receiver. Unset
+        /// disables the GH worker.
+        #[arg(long, env = "WLOG_GH_LISTEN")]
+        gh_listen: Option<String>,
+        /// HMAC secret for GitHub webhook verification.
+        #[arg(long, env = "WLOG_GH_SECRET")]
+        gh_secret: Option<String>,
     },
     /// Print whether a daemon socket currently exists.
     Status {
@@ -328,6 +335,8 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
             nats_url,
             cc_projects_dir,
             cc_cursor,
+            gh_listen,
+            gh_secret,
         } => {
             let socket = socket.unwrap_or_else(wlog_ingest_git::default_socket_path);
             // `--cc-projects-dir auto` resolves to the default; any other
@@ -344,6 +353,8 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
                 nats_url,
                 cc_projects_dir,
                 cc_cursor_path: cc_cursor,
+                gh_listen,
+                gh_secret,
             };
             let shutdown = Arc::new(Notify::new());
             let shutdown_signal = Arc::clone(&shutdown);
@@ -357,6 +368,7 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
             tracing::info!(
                 socket_payloads = stats.socket_payloads,
                 cc_events = stats.cc_events,
+                gh_events = stats.gh_events,
                 "daemon shut down cleanly"
             );
             Ok(ExitCode::SUCCESS)

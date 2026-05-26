@@ -9,8 +9,11 @@
 /// Engine version, surfaced in prompt provenance and logs.
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod batch;
 pub mod calibration;
+pub mod consumer;
 pub mod cost;
 pub mod dispatch;
+pub mod embed;
 pub mod llm;
 pub mod synth;
