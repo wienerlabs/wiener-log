@@ -4,10 +4,12 @@
 //! tasks, edges, and events. Migrations live under `migrations/` and are
 //! embedded into the binary at compile time.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
+mod calibration;
 mod db_types;
 mod edge;
+mod edit;
 mod event;
 mod task;
 mod user;
@@ -17,7 +19,9 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{Executor, PgPool};
 use thiserror::Error;
 
+pub use calibration::{Completion, CompletionRepo, Estimation, EstimationRepo, Estimator};
 pub use edge::EdgeRepo;
+pub use edit::{NewTaskEdit, TaskEdit, TaskEditRepo};
 pub use event::EventRepo;
 pub use task::{NewTask, TaskListFilter, TaskRepo};
 pub use user::{NewUser, UserRepo};

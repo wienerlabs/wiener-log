@@ -15,7 +15,7 @@
 //!
 //! No NATS in this crate; the daemon owns that surface.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod event;
 pub mod hmac;

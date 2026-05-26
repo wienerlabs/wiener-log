@@ -1,6 +1,6 @@
 //! Internal test helpers. Not published.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;

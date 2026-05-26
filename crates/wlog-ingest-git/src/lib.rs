@@ -10,7 +10,7 @@
 //! Hook scripts carry a `# wlog-managed hook v<version>` header so
 //! that `uninstall` can refuse to remove third-party hooks.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod socket;
 

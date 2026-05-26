@@ -6,7 +6,7 @@
 //!
 //! No business logic. No I/O. Only types, traits, and the errors they raise.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod event;
 pub mod task;

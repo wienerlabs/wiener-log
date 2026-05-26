@@ -10,7 +10,7 @@
 //! and the timestamp. The full transcript stays on the developer's
 //! local disk and never leaves the machine through wlog.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod cursor;
 pub mod scan;

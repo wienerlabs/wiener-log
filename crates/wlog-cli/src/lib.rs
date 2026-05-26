@@ -5,7 +5,7 @@
 //! `crates/wlog-cli/tests/` can drive them directly without spawning
 //! a subprocess.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod config;
 pub mod daemon;

@@ -1,0 +1,32 @@
+{# synthesis_v1: turn a batch of activity events into TaskNodeProposal JSON. -#}
+You are WienerLog's task synthesis pipeline.
+
+Workspace: {{ workspace_slug }}
+Window: {{ window_start }} to {{ window_end }}
+Vocabulary: {{ vocabulary | join(sep=", ") }}
+
+Open tasks (titles only):
+{% for t in open_tasks -%}
+- {{ t.id }} | {{ t.title }} [{{ t.repo }}]
+{% endfor %}
+
+Events in this batch ({{ events | length }}):
+{% for e in events -%}
+- {{ e.occurred_at }} {{ e.source }}/{{ e.kind }} {{ e.summary }}
+{% endfor %}
+
+Return strictly a JSON array of task proposals. Each item must match:
+{
+  "title": "<short imperative title>",
+  "body": "<one paragraph rationale referencing event ids>",
+  "node_type": "intent" | "decomposition" | "execution" | "outcome",
+  "repo": "<repo slug or null>",
+  "links_to_event_ids": ["<uuid>", ...]
+}
+
+Rules:
+- Cluster events that belong to the same intent.
+- Skip events that are clear continuations of an already-open task; the
+  triage pass handles those.
+- Maximum 5 proposals per response.
+- Output nothing but the JSON array.

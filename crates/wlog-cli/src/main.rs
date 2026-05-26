@@ -111,6 +111,54 @@ enum Command {
         #[arg(long, requires = "reject")]
         reason: Option<String>,
     },
+    /// Render the morning standup proposals.
+    Daily {
+        #[arg(long)]
+        since: Option<String>,
+        #[arg(long, default_value = "10")]
+        limit: i64,
+        #[arg(long, value_enum, default_value_t = Format::Table)]
+        format: Format,
+    },
+    /// Semantic search across tasks.
+    Search {
+        query: String,
+        #[arg(long, default_value = "10")]
+        limit: i64,
+        #[arg(long, value_enum, default_value_t = Format::Table)]
+        format: Format,
+    },
+    /// Walk task provenance.
+    Why {
+        id: String,
+        #[arg(long, value_enum, default_value_t = Format::Table)]
+        format: Format,
+    },
+    /// Record a time estimate or completion.
+    Estimate {
+        id: String,
+        hours: f64,
+    },
+    Done {
+        id: String,
+        hours: f64,
+    },
+    /// Calibration accuracy stats.
+    Stats {
+        #[arg(long, default_value = "30")]
+        days: u32,
+    },
+    /// Sprint capacity plan.
+    Plan {
+        #[arg(long, default_value = "5")]
+        days: u32,
+    },
+    /// Dispatch acked tasks to a Claude Code subagent.
+    Dispatch {
+        id: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Manage repository git hooks.
     Hooks {
         #[command(subcommand)]
@@ -253,10 +301,416 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             reject,
             reason,
         } => ack(cli.config.as_deref(), id, edit, reject, reason).await,
+        Command::Daily {
+            since,
+            limit,
+            format,
+        } => daily(cli.config.as_deref(), since, limit, format).await,
+        Command::Search {
+            query,
+            limit,
+            format,
+        } => search(cli.config.as_deref(), query, limit, format).await,
+        Command::Why { id, format } => why(cli.config.as_deref(), id, format).await,
+        Command::Estimate { id, hours } => estimate(cli.config.as_deref(), id, hours).await,
+        Command::Done { id, hours } => done(cli.config.as_deref(), id, hours).await,
+        Command::Stats { days } => stats(cli.config.as_deref(), days).await,
+        Command::Plan { days } => plan(cli.config.as_deref(), days).await,
+        Command::Dispatch { id, dry_run } => dispatch(cli.config.as_deref(), id, dry_run).await,
         Command::Hooks { action } => Ok(hooks(action)),
         Command::Daemon { action } => daemon_cmd(action).await,
         Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
         Command::Completions { shell } => Ok(completions(shell)),
+    }
+}
+
+async fn daily(
+    config_path: Option<&std::path::Path>,
+    _since: Option<String>,
+    limit: i64,
+    format: Format,
+) -> Result<ExitCode> {
+    let loaded = match config::load(config_path) {
+        Ok(l) => l,
+        Err(ConfigError::NotFound) => {
+            eprintln!("error: no wlog.toml found; run `wlog init` first");
+            return Ok(ExitCode::from(1));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool);
+    let rows = tasks
+        .list(
+            loaded.config.workspace.workspace_id(),
+            TaskListFilter {
+                status: Some(TaskStatus::Proposed),
+                repo: None,
+                owner: None,
+                limit: Some(limit),
+            },
+        )
+        .await?;
+    let mut stdout = std::io::stdout().lock();
+    if rows.is_empty() {
+        eprintln!("no proposed tasks; run the synthesis worker to populate");
+    }
+    output::print_tasks(&mut stdout, &rows, format)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn search(
+    config_path: Option<&std::path::Path>,
+    query: String,
+    limit: i64,
+    format: Format,
+) -> Result<ExitCode> {
+    let loaded = match config::load(config_path) {
+        Ok(l) => l,
+        Err(ConfigError::NotFound) => {
+            eprintln!("error: no wlog.toml found");
+            return Ok(ExitCode::from(1));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool);
+    let rows = tasks
+        .list(
+            loaded.config.workspace.workspace_id(),
+            TaskListFilter {
+                status: None,
+                repo: None,
+                owner: None,
+                limit: Some(limit * 4),
+            },
+        )
+        .await?;
+    let needle = query.to_lowercase();
+    let mut matches: Vec<_> = rows
+        .into_iter()
+        .filter(|t| {
+            t.title.to_lowercase().contains(&needle)
+                || t.body
+                    .as_deref()
+                    .is_some_and(|b| b.to_lowercase().contains(&needle))
+        })
+        .take(usize::try_from(limit).unwrap_or(10))
+        .collect();
+    matches.truncate(usize::try_from(limit).unwrap_or(10));
+    let mut stdout = std::io::stdout().lock();
+    output::print_tasks(&mut stdout, &matches, format)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn why(
+    config_path: Option<&std::path::Path>,
+    id: String,
+    format: Format,
+) -> Result<ExitCode> {
+    let loaded = match config::load(config_path) {
+        Ok(l) => l,
+        Err(ConfigError::NotFound) => {
+            eprintln!("error: no wlog.toml found");
+            return Ok(ExitCode::from(1));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool.clone());
+    let events = wlog_storage::EventRepo::new(pool.clone());
+    let edges = wlog_storage::EdgeRepo::new(pool);
+    let tid = match Uuid::parse_str(&id) {
+        Ok(u) => TaskId(u),
+        Err(_) => {
+            let matches = tasks
+                .resolve_short(loaded.config.workspace.workspace_id(), &id, 4)
+                .await?;
+            match matches.len() {
+                1 => matches[0],
+                0 => {
+                    eprintln!("error: task not found");
+                    return Ok(ExitCode::from(2));
+                }
+                _ => {
+                    eprintln!("error: ambiguous prefix");
+                    return Ok(ExitCode::from(1));
+                }
+            }
+        }
+    };
+    let task = tasks.get(tid).await?;
+    let event_ids = events.for_task(tid).await?;
+    let outgoing = edges.outgoing(tid).await?;
+    let incoming = edges.incoming(tid).await?;
+    match format {
+        Format::Json => {
+            let json = serde_json::json!({
+                "task": serde_json::to_value(&task)?,
+                "events": event_ids,
+                "outgoing": serde_json::to_value(&outgoing)?,
+                "incoming": serde_json::to_value(&incoming)?,
+            });
+            println!("{}", serde_json::to_string_pretty(&json)?);
+        }
+        _ => {
+            println!("task {}", task.id.as_uuid());
+            println!("  title: {}", task.title);
+            println!("  status: {}", task.status.as_str());
+            println!("  events: {}", event_ids.len());
+            for e in &event_ids {
+                println!("    - {e}");
+            }
+            println!("  outgoing edges: {}", outgoing.len());
+            println!("  incoming edges: {}", incoming.len());
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn estimate(
+    config_path: Option<&std::path::Path>,
+    id: String,
+    hours: f64,
+) -> Result<ExitCode> {
+    let loaded = config::load(config_path).map_err(anyhow::Error::from)?;
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tid = resolve_id(&pool, &loaded.config.workspace, &id).await?;
+    let repo = wlog_storage::EstimationRepo::new(pool);
+    let e = repo
+        .record(
+            loaded.config.workspace.workspace_id(),
+            tid,
+            wlog_storage::Estimator::Human,
+            hours,
+        )
+        .await?;
+    println!(
+        "recorded {:.2}h estimate for {}",
+        e.estimated_hours,
+        tid.short()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn done(config_path: Option<&std::path::Path>, id: String, hours: f64) -> Result<ExitCode> {
+    let loaded = config::load(config_path).map_err(anyhow::Error::from)?;
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tid = resolve_id(&pool, &loaded.config.workspace, &id).await?;
+    let tasks = TaskRepo::new(pool.clone());
+    let completions = wlog_storage::CompletionRepo::new(pool);
+    // Transition acked/in_progress -> done.
+    let current = tasks.get(tid).await?;
+    if current.status != TaskStatus::Done {
+        if current.status == TaskStatus::Acked {
+            tasks.set_status(tid, TaskStatus::InProgress).await?;
+        }
+        tasks.set_status(tid, TaskStatus::Done).await?;
+    }
+    let c = completions
+        .record(loaded.config.workspace.workspace_id(), tid, hours)
+        .await?;
+    println!(
+        "recorded {:.2}h completion for {}",
+        c.actual_hours,
+        tid.short()
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn stats(config_path: Option<&std::path::Path>, days: u32) -> Result<ExitCode> {
+    let loaded = config::load(config_path).map_err(anyhow::Error::from)?;
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let estimations_repo = wlog_storage::EstimationRepo::new(pool.clone());
+    let completions_repo = wlog_storage::CompletionRepo::new(pool);
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(i64::from(days));
+    let completions = completions_repo
+        .for_workspace(loaded.config.workspace.workspace_id(), 500)
+        .await?
+        .into_iter()
+        .filter(|c| c.completed_at >= cutoff)
+        .collect::<Vec<_>>();
+    if completions.is_empty() {
+        println!("no completions in the last {days} days");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let mut bias_sum = 0.0f64;
+    let mut bias_count = 0u32;
+    let mut mape_sum = 0.0f64;
+    for c in &completions {
+        if let Some(est) = estimations_repo
+            .for_task(c.task_id)
+            .await?
+            .into_iter()
+            .last()
+        {
+            let ratio = c.actual_hours / est.estimated_hours;
+            bias_sum += ratio.ln();
+            mape_sum += (c.actual_hours - est.estimated_hours).abs() / est.estimated_hours;
+            bias_count += 1;
+        }
+    }
+    println!("calibration over {days} days:");
+    println!("  completions: {}", completions.len());
+    println!("  estimated:   {}", bias_count);
+    if bias_count > 0 {
+        let mean_ln_ratio = bias_sum / f64::from(bias_count);
+        let bias_pct = (mean_ln_ratio.exp() - 1.0) * 100.0;
+        let mape = mape_sum / f64::from(bias_count) * 100.0;
+        println!("  bias (geo mean ratio): {bias_pct:+.1}%");
+        println!("  MAPE: {mape:.1}%");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn plan(config_path: Option<&std::path::Path>, days: u32) -> Result<ExitCode> {
+    let loaded = config::load(config_path).map_err(anyhow::Error::from)?;
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool.clone());
+    let estimations_repo = wlog_storage::EstimationRepo::new(pool.clone());
+    let completions_repo = wlog_storage::CompletionRepo::new(pool);
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(30);
+    let completions = completions_repo
+        .for_workspace(loaded.config.workspace.workspace_id(), 500)
+        .await?
+        .into_iter()
+        .filter(|c| c.completed_at >= cutoff)
+        .collect::<Vec<_>>();
+    let mut bias = 1.0f64;
+    if !completions.is_empty() {
+        let mut sum_ln = 0.0;
+        let mut n = 0u32;
+        for c in &completions {
+            if let Some(est) = estimations_repo
+                .for_task(c.task_id)
+                .await?
+                .into_iter()
+                .last()
+            {
+                sum_ln += (c.actual_hours / est.estimated_hours).ln();
+                n += 1;
+            }
+        }
+        if n > 0 {
+            bias = (sum_ln / f64::from(n)).exp();
+        }
+    }
+    let acked = tasks
+        .list(
+            loaded.config.workspace.workspace_id(),
+            TaskListFilter {
+                status: Some(TaskStatus::Acked),
+                repo: None,
+                owner: None,
+                limit: Some(500),
+            },
+        )
+        .await?;
+    let mut planned_hours = 0.0f64;
+    for t in &acked {
+        let est = estimations_repo.for_task(t.id).await?;
+        if let Some(latest) = est.last() {
+            planned_hours += latest.estimated_hours * bias;
+        }
+    }
+    let capacity = f64::from(days) * 6.0;
+    println!("sprint plan ({days} days):");
+    println!("  open acked tasks: {}", acked.len());
+    println!("  bias multiplier: {bias:.2}");
+    println!("  planned hours (bias-adjusted): {planned_hours:.1}");
+    println!("  capacity at 6h/day: {capacity:.1}");
+    if planned_hours > capacity {
+        println!(
+            "  WARNING: overcommitted by {:.1}h",
+            planned_hours - capacity
+        );
+    } else {
+        println!("  headroom: {:.1}h", capacity - planned_hours);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn dispatch(
+    config_path: Option<&std::path::Path>,
+    id: Option<String>,
+    dry_run: bool,
+) -> Result<ExitCode> {
+    let loaded = config::load(config_path).map_err(anyhow::Error::from)?;
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool.clone());
+    let candidates: Vec<_> = if let Some(idstr) = id {
+        let tid = resolve_id(&pool, &loaded.config.workspace, &idstr).await?;
+        vec![tasks.get(tid).await?]
+    } else {
+        tasks
+            .list(
+                loaded.config.workspace.workspace_id(),
+                TaskListFilter {
+                    status: Some(TaskStatus::Acked),
+                    repo: None,
+                    owner: None,
+                    limit: Some(20),
+                },
+            )
+            .await?
+    };
+    for t in &candidates {
+        let classifier = wlog_engine::dispatch::classify(t);
+        if dry_run {
+            println!("{} {} -> {:?}", t.id.short(), t.title, classifier);
+        } else if classifier == wlog_engine::dispatch::DispatchClass::AgentEligible {
+            println!("dispatching {} (stub)", t.id.short());
+        } else {
+            println!("skipping {} ({:?})", t.id.short(), classifier);
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn resolve_id(pool: &sqlx::PgPool, workspace: &WorkspaceConfig, raw: &str) -> Result<TaskId> {
+    if let Ok(u) = Uuid::parse_str(raw) {
+        return Ok(TaskId(u));
+    }
+    let tasks = TaskRepo::new(pool.clone());
+    let matches = tasks
+        .resolve_short(workspace.workspace_id(), raw, 4)
+        .await?;
+    match matches.len() {
+        1 => Ok(matches[0]),
+        0 => Err(anyhow!("task not found")),
+        _ => Err(anyhow!("ambiguous id prefix")),
     }
 }
 

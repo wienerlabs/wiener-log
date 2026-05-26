@@ -28,6 +28,7 @@ reqwest.workspace = true
 async-nats.workspace = true
 futures.workspace = true
 sha2.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 tempdir = "0.3"

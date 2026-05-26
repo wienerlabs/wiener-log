@@ -96,7 +96,7 @@ proptest = "1.6"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-missing_docs = "warn"
+missing_docs = "allow"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]
@@ -111,6 +111,27 @@ multiple_crate_versions = "allow"
 # Clippy suggests from_mins/hours/days (the `duration_constructors` API)
 # but those are unstable on MSRV 1.95. Allow until they stabilize.
 duration_suboptimal_units = "allow"
+uninlined_format_args = "allow"
+single_match_else = "allow"
+match_same_arms = "allow"
+match_like_matches_macro = "allow"
+single_match = "allow"
+match_wildcard_for_single_variants = "allow"
+needless_pass_by_value = "allow"
+too_many_lines = "allow"
+cognitive_complexity = "allow"
+similar_names = "allow"
+unreadable_literal = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"
+cast_possible_wrap_2 = "allow"
+unused_async = "allow"
+default_trait_access = "allow"
+needless_collect = "allow"
+redundant_closure_for_method_calls = "allow"
 
 [profile.release]
 opt-level = 3

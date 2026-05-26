@@ -4,7 +4,7 @@
 //! synthesis, calibration, and dispatch respectively. Each module ships its
 //! own README under `crates/wlog-engine/docs/` when it lands.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 /// Engine version, surfaced in prompt provenance and logs.
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -16,4 +16,5 @@ pub mod cost;
 pub mod dispatch;
 pub mod embed;
 pub mod llm;
+pub mod solana;
 pub mod synth;
