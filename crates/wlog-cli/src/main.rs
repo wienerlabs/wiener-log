@@ -14,8 +14,8 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 use wlog_proto::{NodeType, TaskId, TaskStatus};
 use wlog_storage::{
-    EdgeRepo, NewTask, NewUser, NewWorkspace, StorageConfig, StorageError, TaskListFilter,
-    TaskRepo, UserRepo, WorkspaceRepo, connect, healthcheck, migrate,
+    EdgeRepo, EventRepo, NewTask, NewUser, NewWorkspace, StorageConfig, StorageError,
+    TaskListFilter, TaskRepo, UserRepo, WorkspaceRepo, connect, healthcheck, migrate,
 };
 
 use self::config::{Config, ConfigError, StorageSection, WorkspaceConfig};
@@ -217,6 +217,8 @@ enum Command {
     },
     /// Print the Wiener Labs ASCII banner.
     Banner,
+    /// Interactive first-run wizard: prompts for workspace + DB + NATS, then init.
+    Setup,
     /// Local diagnostic: daemon socket, NATS round-trip, Postgres, hooks.
     Status {
         /// Skip the NATS round-trip probe.
@@ -233,6 +235,27 @@ enum Command {
     Where,
     /// Detailed build, version, and environment info.
     About,
+    /// Print recent events from the database (newest first).
+    Log {
+        /// Maximum rows.
+        #[arg(long, default_value_t = 50)]
+        limit: i64,
+        /// Filter by `source.kind`, e.g. `git.post-commit`, `cc.session-start`,
+        /// or just `git` to match any kind.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Show all workspaces (requires `WLOG_ADMIN_DATABASE_URL`).
+        #[arg(long)]
+        all_workspaces: bool,
+    },
+    /// Render a task and its descendants as an ASCII tree.
+    Tree {
+        /// Task identifier (full UUID or >=8 hex chars).
+        id: String,
+        /// Maximum depth to descend.
+        #[arg(long, default_value_t = 8)]
+        depth: usize,
+    },
     /// Run an extended health check (status + version + disk + uptime).
     Doctor {
         /// Skip remote probes (NATS + Postgres).
@@ -284,6 +307,24 @@ enum AdminAction {
         /// Truncate each payload body to N bytes when printing.
         #[arg(long, default_value_t = 240)]
         max_body: usize,
+    },
+    /// Re-publish historic events from Postgres back to NATS.
+    Replay {
+        /// Database URL.
+        #[arg(long, env = "WLOG_ADMIN_DATABASE_URL")]
+        database_url: Option<String>,
+        /// NATS URL to publish onto.
+        #[arg(long, env = "WLOG_NATS_URL", default_value = "nats://127.0.0.1:4222")]
+        nats_url: String,
+        /// Filter to this workspace slug (default: all).
+        #[arg(long)]
+        workspace: Option<String>,
+        /// Maximum events to replay.
+        #[arg(long, default_value_t = 100)]
+        limit: i64,
+        /// Print the subject + payload size instead of publishing.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -428,6 +469,7 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         Command::Daemon { action } => daemon_cmd(action).await,
         Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
         Command::Banner => Ok(banner_cmd()),
+        Command::Setup => setup_cmd().await,
         Command::Status {
             no_nats,
             no_db,
@@ -436,6 +478,12 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         Command::Where => Ok(where_cmd()),
         Command::About => Ok(about_cmd()),
         Command::Doctor { offline } => doctor_cmd(cli.config.as_deref(), offline).await,
+        Command::Log {
+            limit,
+            kind,
+            all_workspaces,
+        } => log_cmd(cli.config.as_deref(), limit, kind, all_workspaces).await,
+        Command::Tree { id, depth } => tree_cmd(cli.config.as_deref(), id, depth).await,
         Command::Admin { action } => admin_cmd(action).await,
         Command::Completions { shell } => Ok(completions(shell)),
     }
@@ -445,6 +493,67 @@ fn banner_cmd() -> ExitCode {
     let mut stdout = std::io::stdout().lock();
     let _ = banner::print_banner(&mut stdout, banner::should_color());
     ExitCode::SUCCESS
+}
+
+async fn setup_cmd() -> Result<ExitCode> {
+    use std::io::{BufRead, Write as _};
+    use wlog_cli::ui;
+
+    {
+        let mut stdout = std::io::stdout().lock();
+        let _ = banner::print_banner(&mut stdout, banner::should_color());
+    }
+    println!();
+    ui::section("interactive setup");
+    println!(
+        "{}",
+        ui::dim("Press Enter to accept the default in (parens)."),
+    );
+    println!();
+
+    fn prompt(label: &str, default: &str) -> Result<String> {
+        let mut out = std::io::stdout().lock();
+        write!(out, "  {label} ({default}): ")?;
+        out.flush()?;
+        drop(out);
+        let stdin = std::io::stdin();
+        let mut line = String::new();
+        stdin.lock().read_line(&mut line)?;
+        let trimmed = line.trim().to_string();
+        Ok(if trimmed.is_empty() {
+            default.to_string()
+        } else {
+            trimmed
+        })
+    }
+
+    let cwd_name = std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "me".to_string());
+    let default_user = std::env::var("USER").unwrap_or_else(|_| "me".to_string());
+
+    let slug = prompt("workspace slug", &cwd_name)?;
+    let name = prompt("workspace name", &slug)?;
+    let user = prompt("your handle", &default_user)?;
+    let database_url = prompt("Postgres URL", "postgres://wlog:wlog@localhost:5435/wlog")?;
+
+    println!();
+    ui::section("review");
+    ui::kv("slug", &slug);
+    ui::kv("name", &name);
+    ui::kv("user", &user);
+    ui::kv("database", &database_url);
+    println!();
+
+    let confirm = prompt("proceed? [y/N]", "y")?;
+    if !matches!(confirm.to_lowercase().as_str(), "y" | "yes") {
+        ui::warning("aborted");
+        return Ok(ExitCode::from(1));
+    }
+
+    println!();
+    init(Some(slug), Some(name), user, database_url, false).await
 }
 
 async fn status_cmd(
@@ -779,6 +888,13 @@ async fn admin_cmd(action: AdminAction) -> Result<ExitCode> {
             subject,
             max_body,
         } => admin_tail(nats_url, subject, max_body).await,
+        AdminAction::Replay {
+            database_url,
+            nats_url,
+            workspace,
+            limit,
+            dry_run,
+        } => admin_replay(database_url, nats_url, workspace, limit, dry_run).await,
     }
 }
 
@@ -795,6 +911,249 @@ fn resolve_admin_db_url(explicit: Option<String>) -> Result<String> {
     Err(anyhow!(
         "no database URL; pass --database-url, WLOG_ADMIN_DATABASE_URL, or WLOG_DATABASE_URL"
     ))
+}
+
+async fn log_cmd(
+    config_path: Option<&std::path::Path>,
+    limit: i64,
+    kind_filter: Option<String>,
+    all_workspaces: bool,
+) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
+    // Pick the DB URL + the workspace scope.
+    let (pool, workspace_id) = if all_workspaces {
+        let url = resolve_admin_db_url(None)?;
+        let p = connect(&StorageConfig {
+            url,
+            max_connections: 2,
+        })
+        .await?;
+        (p, None)
+    } else {
+        match config::load(config_path) {
+            Ok(loaded) => {
+                let p = connect(&StorageConfig {
+                    url: loaded.config.storage.url.clone(),
+                    max_connections: 2,
+                })
+                .await?;
+                (p, Some(loaded.config.workspace.workspace_id()))
+            }
+            Err(ConfigError::NotFound) => {
+                ui::error("no wlog.toml; run `wlog init` or pass --all-workspaces");
+                return Ok(ExitCode::from(1));
+            }
+            Err(e) => return Err(e.into()),
+        }
+    };
+    let events = EventRepo::new(pool)
+        .list_recent(workspace_id, limit)
+        .await?;
+
+    let filter_lower = kind_filter.as_deref().map(str::to_lowercase);
+    let mut filtered = events;
+    if let Some(ref f) = filter_lower {
+        filtered.retain(|e| {
+            let label = format!(
+                "{}.{}",
+                wlog_storage::event_source_str(e.source),
+                e.kind.as_str()
+            );
+            label.to_lowercase().contains(f.as_str())
+        });
+    }
+
+    ui::banner_heading(if all_workspaces {
+        "events (all)"
+    } else {
+        "events"
+    });
+    let mut table = ui::table(&["WHEN", "SOURCE", "KIND", "ID"]);
+    for e in &filtered {
+        let when = e.occurred_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        let id_short = e.id.to_string();
+        let id_render = &id_short[..8];
+        table.add_row(vec![
+            when,
+            wlog_storage::event_source_str(e.source).to_string(),
+            e.kind.as_str().to_string(),
+            id_render.to_string(),
+        ]);
+    }
+    println!("{table}");
+    println!();
+    println!(
+        "{} {}",
+        ui::bold(&filtered.len().to_string()),
+        ui::dim("events shown")
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn tree_cmd(
+    config_path: Option<&std::path::Path>,
+    raw_id: String,
+    max_depth: usize,
+) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
+    let loaded = match config::load(config_path) {
+        Ok(l) => l,
+        Err(ConfigError::NotFound) => {
+            ui::error("no wlog.toml; run `wlog init`");
+            return Ok(ExitCode::from(1));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let pool = connect(&StorageConfig {
+        url: loaded.config.storage.url.clone(),
+        max_connections: loaded.config.storage.max_connections,
+    })
+    .await?;
+    let tasks = TaskRepo::new(pool.clone());
+    let edges = EdgeRepo::new(pool);
+
+    let root = match resolve_task_id(&tasks, &loaded.config.workspace, &raw_id).await? {
+        ResolvedId::Single(id) => id,
+        ResolvedId::Missing => {
+            ui::error(format!("no task matches `{raw_id}`"));
+            return Ok(ExitCode::from(1));
+        }
+        ResolvedId::Ambiguous(matches) => {
+            ui::error(format!("ambiguous id `{raw_id}`"));
+            for tid in matches {
+                ui::hint(tid.short());
+            }
+            return Ok(ExitCode::from(1));
+        }
+    };
+
+    ui::banner_heading("task tree");
+    let mut visited: std::collections::HashSet<TaskId> = std::collections::HashSet::new();
+    walk_tree(
+        &tasks,
+        &edges,
+        root,
+        &mut visited,
+        &mut Vec::new(),
+        max_depth,
+        true,
+    )
+    .await?;
+    Ok(ExitCode::SUCCESS)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn walk_tree<'a>(
+    tasks: &'a TaskRepo,
+    edges: &'a EdgeRepo,
+    task: TaskId,
+    visited: &'a mut std::collections::HashSet<TaskId>,
+    prefix_stack: &'a mut Vec<bool>,
+    max_depth: usize,
+    is_last_sibling: bool,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        use wlog_cli::ui;
+
+        if !visited.insert(task) {
+            // Already rendered; mark as cycle and stop.
+            render_tree_line(
+                prefix_stack,
+                is_last_sibling,
+                &ui::dim(&format!("↻ {} (cycle)", task.short())),
+            );
+            return Ok(());
+        }
+        let node = match tasks.get(task).await {
+            Ok(n) => n,
+            Err(StorageError::NotFound) => {
+                render_tree_line(
+                    prefix_stack,
+                    is_last_sibling,
+                    &ui::dim(&format!("{} (missing)", task.short())),
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let label = format_task_label(&node);
+        render_tree_line(prefix_stack, is_last_sibling, &label);
+
+        if prefix_stack.len() >= max_depth {
+            // Depth cap; show truncation marker if outgoing exists.
+            let outgoing = edges.outgoing(task).await?;
+            if !outgoing.is_empty() {
+                prefix_stack.push(!is_last_sibling);
+                render_tree_line(
+                    prefix_stack,
+                    true,
+                    &ui::dim(&format!("… ({} more, depth cap)", outgoing.len())),
+                );
+                prefix_stack.pop();
+            }
+            return Ok(());
+        }
+
+        let outgoing = edges.outgoing(task).await?;
+        let len = outgoing.len();
+        for (i, edge) in outgoing.into_iter().enumerate() {
+            let last = i + 1 == len;
+            prefix_stack.push(!is_last_sibling);
+            walk_tree(
+                tasks,
+                edges,
+                edge.to_task,
+                visited,
+                prefix_stack,
+                max_depth,
+                last,
+            )
+            .await?;
+            prefix_stack.pop();
+        }
+        Ok(())
+    })
+}
+
+fn render_tree_line(prefix_stack: &[bool], is_last_sibling: bool, label: &str) {
+    use wlog_cli::ui;
+    let mut prefix = String::new();
+    if !prefix_stack.is_empty() {
+        for &continuing in &prefix_stack[..prefix_stack.len() - 1] {
+            prefix.push_str(if continuing { "│   " } else { "    " });
+        }
+        prefix.push_str(if is_last_sibling {
+            "└── "
+        } else {
+            "├── "
+        });
+    }
+    println!("{}{}", ui::dim(&prefix), label);
+}
+
+fn format_task_label(node: &wlog_proto::TaskNode) -> String {
+    use wlog_cli::ui;
+    let status_sym = match node.status {
+        TaskStatus::Acked => ui::green("✓"),
+        TaskStatus::Rejected => ui::red("✗"),
+        TaskStatus::InProgress => ui::info("●"),
+        TaskStatus::Done => ui::green("●"),
+        TaskStatus::Proposed => ui::dim("○"),
+    };
+    let node_kind = match node.node_type {
+        NodeType::Intent => "intent",
+        NodeType::Decomposition => "decomp",
+        NodeType::Execution => "exec",
+        NodeType::Outcome => "outcome",
+    };
+    format!(
+        "{status_sym} {short}  {kind}  {title}",
+        short = ui::bold(&node.id.short()),
+        kind = ui::dim(node_kind),
+        title = node.title
+    )
 }
 
 async fn admin_users(database_url: Option<String>, limit: i64) -> Result<ExitCode> {
@@ -921,6 +1280,86 @@ async fn admin_tail(nats_url: String, subject: String, max_body: usize) -> Resul
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+async fn admin_replay(
+    database_url: Option<String>,
+    nats_url: String,
+    workspace_slug: Option<String>,
+    limit: i64,
+    dry_run: bool,
+) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
+    let url = resolve_admin_db_url(database_url)?;
+    let pool = connect(&StorageConfig {
+        url,
+        max_connections: 2,
+    })
+    .await?;
+
+    let workspace = if let Some(slug) = workspace_slug.as_deref() {
+        Some(WorkspaceRepo::new(pool.clone()).get_by_slug(slug).await?)
+    } else {
+        None
+    };
+
+    let events = EventRepo::new(pool.clone())
+        .list_recent(workspace.as_ref().map(|w| w.id), limit)
+        .await?;
+
+    ui::banner_heading("admin replay");
+    ui::kv(
+        "workspace",
+        workspace.as_ref().map_or("(all)", |w| w.slug.as_str()),
+    );
+    ui::kv("events", events.len());
+    ui::kv("nats", &nats_url);
+    ui::kv("mode", if dry_run { "dry-run" } else { "live" });
+    println!();
+
+    if dry_run {
+        let mut table = ui::table(&["WHEN", "SUBJECT", "BYTES"]);
+        for e in &events {
+            let subj = replay_subject(e, workspace_slug.as_deref());
+            let when = e.occurred_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+            let body = serde_json::to_vec(&e.payload).unwrap_or_default();
+            table.add_row(vec![when, subj, body.len().to_string()]);
+        }
+        println!("{table}");
+        ui::warning("dry-run; nothing was published");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let client = async_nats::connect(&nats_url)
+        .await
+        .with_context(|| format!("connecting to {nats_url}"))?;
+    let mut published = 0u64;
+    for e in &events {
+        let subj = replay_subject(e, workspace_slug.as_deref());
+        let body = serde_json::to_vec(&e.payload)?;
+        client
+            .publish(subj.clone(), body.into())
+            .await
+            .with_context(|| format!("publish {subj}"))?;
+        published += 1;
+    }
+    client.flush().await.context("flush after replay")?;
+    println!(
+        "{} {}",
+        ui::bold(&published.to_string()),
+        ui::dim("events replayed")
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+fn replay_subject(event: &wlog_proto::Event, fallback_slug: Option<&str>) -> String {
+    let workspace = fallback_slug.unwrap_or("replay");
+    let src = wlog_storage::event_source_str(event.source);
+    format!(
+        "wlog.{workspace}.event.{src}.{kind}",
+        kind = event.kind.as_str()
+    )
 }
 
 async fn daily(

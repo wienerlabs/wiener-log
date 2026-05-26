@@ -20,6 +20,7 @@ use sqlx::{Executor, PgPool};
 use thiserror::Error;
 
 pub use calibration::{Completion, CompletionRepo, Estimation, EstimationRepo, Estimator};
+pub use db_types::event_source_str;
 pub use edge::EdgeRepo;
 pub use edit::{NewTaskEdit, TaskEdit, TaskEditRepo};
 pub use event::EventRepo;

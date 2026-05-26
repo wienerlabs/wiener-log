@@ -81,4 +81,44 @@ impl EventRepo {
                 .await?;
         Ok(rows.into_iter().map(|(u,)| u).collect())
     }
+
+    /// Recent events, newest first. Optional workspace filter.
+    /// Used by `wlog log` and `wlog admin replay`.
+    pub async fn list_recent(
+        &self,
+        workspace: Option<WorkspaceId>,
+        limit: i64,
+    ) -> Result<Vec<Event>, StorageError> {
+        let rows = if let Some(ws) = workspace {
+            sqlx::query_as::<_, (Uuid, Uuid, String, String, JsonValue, DateTime<Utc>)>(
+                "SELECT id, workspace_id, source, kind, payload, occurred_at \
+                 FROM events WHERE workspace_id = $1 ORDER BY occurred_at DESC LIMIT $2",
+            )
+            .bind(ws.0)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, (Uuid, Uuid, String, String, JsonValue, DateTime<Utc>)>(
+                "SELECT id, workspace_id, source, kind, payload, occurred_at \
+                 FROM events ORDER BY occurred_at DESC LIMIT $1",
+            )
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            out.push(Event {
+                id: row.0,
+                workspace_id: WorkspaceId(row.1),
+                source: parse_event_source(&row.2)?,
+                kind: EventKind::new(row.3),
+                payload: row.4,
+                occurred_at: row.5,
+            });
+        }
+        Ok(out)
+    }
 }
