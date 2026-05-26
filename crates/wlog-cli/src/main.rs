@@ -1153,6 +1153,11 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
             gh_listen,
             gh_secret,
         } => {
+            {
+                let mut stdout = std::io::stdout().lock();
+                let _ = banner::print_banner(&mut stdout, banner::should_color());
+            }
+            println!();
             let socket = socket.unwrap_or_else(wlog_ingest_git::default_socket_path);
             // `--cc-projects-dir auto` resolves to the default; any other
             // value (or the env-var equivalent) is taken verbatim.
@@ -1342,6 +1347,11 @@ async fn init(
     database_url: String,
     force: bool,
 ) -> Result<ExitCode> {
+    let mut stdout = std::io::stdout().lock();
+    let _ = banner::print_banner(&mut stdout, banner::should_color());
+    drop(stdout);
+    println!();
+
     let slug = match slug {
         Some(s) => s,
         None => derive_slug_from_cwd()?,
