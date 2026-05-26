@@ -81,7 +81,7 @@ tera = "1.20"
 config = { version = "0.15", default-features = false, features = ["toml"] }
 
 # Crypto / hashing
-sha2 = "0.10"
+sha2 = "0.11"
 hmac = "0.12"
 hex = "0.4"
 
