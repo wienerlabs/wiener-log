@@ -20,6 +20,7 @@ wlog-proto.workspace = true
 wlog-storage.workspace = true
 wlog-engine.workspace = true
 wlog-ingest-git.workspace = true
+wlog-ingest-cc.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true

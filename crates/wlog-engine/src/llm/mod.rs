@@ -60,7 +60,10 @@ pub enum StopReason {
 
 /// Cost and model accounting for a single completion. Flows into the
 /// cost ledger defined in mandate §2.6 and Phase 1 issue #39.
-#[allow(clippy::struct_field_names, reason = "all fields are token counters by design")]
+#[allow(
+    clippy::struct_field_names,
+    reason = "all fields are token counters by design"
+)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Usage {
     /// Model identifier as returned by the API.

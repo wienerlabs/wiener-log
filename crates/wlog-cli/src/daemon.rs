@@ -1,45 +1,89 @@
 //! `wlog daemon` long-running coordinator.
 //!
-//! Owns the Unix socket that hook scripts write to and (in Phase 1 #27)
-//! the NATS publisher that forwards enriched payloads upstream.
-//! Currently ships the listener and a logging sink; the NATS leg lands
-//! in the same crate but a separate module.
+//! Two workers run side by side under one process:
+//!
+//! 1. **Socket listener** - reads `HookPayload` lines from the Unix
+//!    socket written to by git hooks (via `wlog hooks notify`).
+//! 2. **CC worker** - polls `~/.claude/projects/` every
+//!    [`CC_POLL_INTERVAL`] and republishes new transcript activity as
+//!    `event.cc.*` payloads.
+//!
+//! Both workers share a single [`PayloadSink`] (NATS in production,
+//! logging in tests) so the wire layer stays uniform.
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::UnixListener;
 use tokio::sync::Notify;
 use tokio::task::JoinSet;
+use tokio::time::interval;
 
+use wlog_ingest_cc::{CcEvent, ScannerCursor};
 use wlog_ingest_git::HookPayload;
+
+/// How often the CC worker rescans the projects directory.
+pub const CC_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Configuration assembled from CLI args and environment.
 #[derive(Debug, Clone)]
 pub struct DaemonConfig {
     /// Path to bind the Unix socket at.
     pub socket: PathBuf,
-    /// Optional NATS URL; `None` skips publishing (Phase 1 #27 lands the
-    /// real wiring; this Phase 1 #26 daemon ships only the listener so
-    /// tests can verify the wire path independently).
+    /// Optional NATS URL; `None` skips publishing and feeds payloads
+    /// into [`LoggingSink`] instead.
     pub nats_url: Option<String>,
+    /// Optional `~/.claude/projects/` directory to watch. When `None`,
+    /// the CC worker does not start. Tests pass an explicit path.
+    pub cc_projects_dir: Option<PathBuf>,
+    /// Where to persist the CC cursor. Defaults to
+    /// [`ScannerCursor::default_path`].
+    pub cc_cursor_path: Option<PathBuf>,
 }
 
-/// Run the daemon until `shutdown` fires. Returns the number of
-/// payloads accepted in the listener's lifetime.
-pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<u64> {
+/// Counters accumulated across all workers.
+#[derive(Debug, Default)]
+pub struct DaemonStats {
+    /// `HookPayload`s accepted from the socket.
+    pub socket_payloads: u64,
+    /// CC events forwarded to the sink.
+    pub cc_events: u64,
+}
+
+/// Run the daemon until `shutdown` fires. Returns aggregated counters
+/// for every worker.
+pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<DaemonStats> {
     let listener = bind_listener(&config.socket)?;
     tracing::info!(socket = %config.socket.display(), "wlog daemon listening");
 
     let sink: Arc<dyn PayloadSink> = match config.nats_url {
-        Some(url) => Arc::new(NatsSink::connect(&url).await?),
+        Some(ref url) => Arc::new(NatsSink::connect(url).await?),
         None => Arc::new(LoggingSink::default()),
     };
 
-    let counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let socket_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let cc_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut tasks: JoinSet<()> = JoinSet::new();
+
+    // Spin up the CC worker if a projects dir was configured.
+    if let Some(projects_dir) = config.cc_projects_dir.clone() {
+        let sink = Arc::clone(&sink);
+        let counter = Arc::clone(&cc_counter);
+        let shutdown = Arc::clone(&shutdown);
+        let cursor_path = config
+            .cc_cursor_path
+            .clone()
+            .unwrap_or_else(ScannerCursor::default_path);
+        tasks.spawn(async move {
+            if let Err(e) = run_cc_worker(projects_dir, cursor_path, sink, counter, shutdown).await
+            {
+                tracing::warn!(error = %e, "cc worker exited with error");
+            }
+        });
+    }
 
     loop {
         tokio::select! {
@@ -57,7 +101,7 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<u64> {
                     }
                 };
                 let sink = Arc::clone(&sink);
-                let counter = Arc::clone(&counter);
+                let counter = Arc::clone(&socket_counter);
                 tasks.spawn(async move {
                     if let Err(e) = handle_connection(stream, sink, counter).await {
                         tracing::warn!(error = %e, "connection handler failed");
@@ -70,7 +114,78 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<u64> {
     // Drain in-flight tasks so no payload is dropped on shutdown.
     while tasks.join_next().await.is_some() {}
     let _ = std::fs::remove_file(&config.socket);
-    Ok(counter.load(std::sync::atomic::Ordering::SeqCst))
+    Ok(DaemonStats {
+        socket_payloads: socket_counter.load(std::sync::atomic::Ordering::SeqCst),
+        cc_events: cc_counter.load(std::sync::atomic::Ordering::SeqCst),
+    })
+}
+
+async fn run_cc_worker(
+    projects_dir: PathBuf,
+    cursor_path: PathBuf,
+    sink: Arc<dyn PayloadSink>,
+    counter: Arc<std::sync::atomic::AtomicU64>,
+    shutdown: Arc<Notify>,
+) -> Result<()> {
+    let mut cursor = ScannerCursor::load(&cursor_path)
+        .with_context(|| format!("loading cc cursor at {}", cursor_path.display()))?;
+    let mut ticker = interval(CC_POLL_INTERVAL);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    tracing::info!(projects = %projects_dir.display(), "cc worker started");
+    loop {
+        tokio::select! {
+            biased;
+            () = shutdown.notified() => {
+                tracing::info!("cc worker shutting down");
+                let _ = cursor.save(&cursor_path);
+                return Ok(());
+            }
+            _ = ticker.tick() => {
+                let dir = projects_dir.clone();
+                let mut cursor_clone = cursor.clone();
+                let scan_result = tokio::task::spawn_blocking(move || {
+                    let events = wlog_ingest_cc::scan(&dir, &mut cursor_clone)?;
+                    Ok::<_, std::io::Error>((events, cursor_clone))
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("cc scan join: {e}"))?;
+                let (events, new_cursor) = match scan_result {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "cc scan failed");
+                        continue;
+                    }
+                };
+                cursor = new_cursor;
+                for event in events {
+                    let kind = event.kind();
+                    let payload = HookPayload {
+                        kind: format!("cc.{kind}"),
+                        cwd: projects_dir.display().to_string(),
+                        args: vec![event.session_id().to_string()],
+                        repo_remote: None,
+                        head_sha: None,
+                        branch: None,
+                        emitted_at: chrono::Utc::now(),
+                    };
+                    let extras = serde_json::to_value(&event).unwrap_or(serde_json::Value::Null);
+                    if let Err(e) = sink.accept_cc(payload, extras).await {
+                        tracing::warn!(error = %e, "cc sink rejected event");
+                    } else {
+                        counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
+                }
+                if let Err(e) = cursor.save(&cursor_path) {
+                    tracing::warn!(error = %e, path = %cursor_path.display(), "cursor save failed");
+                }
+            }
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn build_cc_subject(workspace: &str, event: &CcEvent) -> String {
+    format!("wlog.{workspace}.event.cc.{}", event.kind())
 }
 
 fn bind_listener(socket: &std::path::Path) -> Result<UnixListener> {
@@ -112,43 +227,62 @@ async fn handle_connection(
     Ok(())
 }
 
-/// Anything that can absorb a [`HookPayload`].
+/// Anything that can absorb the daemon's inbound events. Two channels:
+/// git hook payloads and Claude Code session events. Implementations
+/// route each channel to the matching ADR-0007 subject prefix.
 #[async_trait::async_trait]
 pub trait PayloadSink: Send + Sync {
-    /// Absorb a single payload. Implementations may persist, publish, or
-    /// log; errors are surfaced by the daemon but do not stop the loop.
+    /// Absorb one git hook payload (`event.git.{kind}`).
     async fn accept(&self, payload: HookPayload) -> Result<()>;
+
+    /// Absorb one CC event (`event.cc.{kind}`). The bridging
+    /// [`HookPayload`] carries metadata (cwd, session id in args); the
+    /// JSON `extras` is the serialized [`CcEvent`].
+    async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()>;
 }
 
 /// Logging sink used when no NATS URL is configured. Useful in tests
 /// and `wlog daemon run --no-nats`.
 #[derive(Debug, Default)]
 pub struct LoggingSink {
-    events: tokio::sync::Mutex<Vec<HookPayload>>,
+    git: tokio::sync::Mutex<Vec<HookPayload>>,
+    cc: tokio::sync::Mutex<Vec<(HookPayload, serde_json::Value)>>,
 }
 
 impl LoggingSink {
-    /// Borrow the accumulated payloads (test helper, used by the
-    /// integration test under `crates/wlog-cli/tests/`).
+    /// Borrow the accumulated git payloads (test helper).
     #[allow(dead_code, reason = "consumed by integration tests only")]
-    pub async fn snapshot(&self) -> Vec<HookPayload> {
-        self.events.lock().await.clone()
+    pub async fn git_snapshot(&self) -> Vec<HookPayload> {
+        self.git.lock().await.clone()
+    }
+
+    /// Borrow the accumulated CC events (test helper).
+    #[allow(dead_code, reason = "consumed by integration tests only")]
+    pub async fn cc_snapshot(&self) -> Vec<(HookPayload, serde_json::Value)> {
+        self.cc.lock().await.clone()
     }
 }
 
 #[async_trait::async_trait]
 impl PayloadSink for LoggingSink {
     async fn accept(&self, payload: HookPayload) -> Result<()> {
-        tracing::info!(kind = %payload.kind, cwd = %payload.cwd, "payload received");
-        self.events.lock().await.push(payload);
+        tracing::info!(kind = %payload.kind, cwd = %payload.cwd, "git payload");
+        self.git.lock().await.push(payload);
+        Ok(())
+    }
+
+    async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()> {
+        tracing::info!(kind = %payload.kind, "cc event");
+        self.cc.lock().await.push((payload, extras));
         Ok(())
     }
 }
 
 /// NATS sink. Connects once on construction; per-message publish uses
-/// the subject ADR-0007 documents: `wlog.{workspace}.event.git.{kind}`.
-/// Workspace defaulting deferred to #32; for now everything publishes
-/// to `wlog.local.event.git.{kind}` so the wire path is testable.
+/// the subject taxonomy ADR-0007 documents:
+///
+/// - `wlog.{workspace}.event.git.{kind}` for hook payloads
+/// - `wlog.{workspace}.event.cc.{kind}` for CC events
 pub struct NatsSink {
     client: async_nats::Client,
     workspace: String,
@@ -174,13 +308,8 @@ impl NatsSink {
             std::env::var("WLOG_DAEMON_WORKSPACE").unwrap_or_else(|_| "local".to_string());
         Ok(Self { client, workspace })
     }
-}
 
-#[async_trait::async_trait]
-impl PayloadSink for NatsSink {
-    async fn accept(&self, payload: HookPayload) -> Result<()> {
-        let subject = format!("wlog.{}.event.git.{}", self.workspace, payload.kind);
-        let body = serde_json::to_vec(&payload)?;
+    async fn publish(&self, subject: String, body: Vec<u8>) -> Result<()> {
         self.client
             .publish(subject.clone(), body.into())
             .await
@@ -189,7 +318,25 @@ impl PayloadSink for NatsSink {
             .flush()
             .await
             .with_context(|| format!("flush after {subject}"))?;
-        tracing::debug!(%subject, kind = %payload.kind, "published");
+        tracing::debug!(%subject, "published");
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl PayloadSink for NatsSink {
+    async fn accept(&self, payload: HookPayload) -> Result<()> {
+        let subject = format!("wlog.{}.event.git.{}", self.workspace, payload.kind);
+        let body = serde_json::to_vec(&payload)?;
+        self.publish(subject, body).await
+    }
+
+    async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()> {
+        // The `payload.kind` field starts with `cc.` because the worker
+        // prefixed it; strip that to recover the bare event kind.
+        let kind = payload.kind.strip_prefix("cc.").unwrap_or(&payload.kind);
+        let subject = format!("wlog.{}.event.cc.{kind}", self.workspace);
+        let body = serde_json::to_vec(&extras)?;
+        self.publish(subject, body).await
     }
 }

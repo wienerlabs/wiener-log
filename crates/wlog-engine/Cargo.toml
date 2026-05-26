@@ -26,3 +26,7 @@ chrono.workspace = true
 uuid.workspace = true
 reqwest.workspace = true
 async-nats.workspace = true
+
+[dev-dependencies]
+tempdir = "0.3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

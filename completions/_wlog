@@ -176,6 +176,81 @@ esac
     ;;
 esac
 ;;
+(daemon)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Path to an explicit config file (overrides discovery)]:CONFIG:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_wlog__subcmd__daemon_commands" \
+"*::: :->daemon" \
+&& ret=0
+
+    case $state in
+    (daemon)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:wlog-daemon-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+'--socket=[Override the default socket path (XDG_RUNTIME_DIR/wlog.sock)]:SOCKET:_files' \
+'--nats-url=[NATS URL; if unset the daemon just logs incoming payloads]:NATS_URL:_default' \
+'--cc-projects-dir=[Path to \`~/.claude/projects/\` to watch. Unset disables the CC worker. Pass \`--cc-projects-dir auto\` to use the default]:CC_PROJECTS_DIR:_files' \
+'--cc-cursor=[Override the CC cursor location]:CC_CURSOR:_files' \
+'--config=[Path to an explicit config file (overrides discovery)]:CONFIG:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'--socket=[Override the default socket path]:SOCKET:_files' \
+'--config=[Path to an explicit config file (overrides discovery)]:CONFIG:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_wlog__subcmd__daemon__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:wlog-daemon-help-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(cost)
+_arguments "${_arguments_options[@]}" : \
+'--days=[Number of days to summarize (inclusive of today, UTC)]:DAYS:_default' \
+'--reports-dir=[Ledger root; defaults to \`<cwd>/reports/cost\`]:REPORTS_DIR:_files' \
+'--config=[Path to an explicit config file (overrides discovery)]:CONFIG:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Path to an explicit config file (overrides discovery)]:CONFIG:_files' \
@@ -248,6 +323,34 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
+(daemon)
+_arguments "${_arguments_options[@]}" : \
+":: :_wlog__subcmd__help__subcmd__daemon_commands" \
+"*::: :->daemon" \
+&& ret=0
+
+    case $state in
+    (daemon)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:wlog-help-daemon-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(cost)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -274,6 +377,8 @@ _wlog_commands() {
 'show:Show a task with its edges' \
 'ack:Acknowledge, edit, or reject a task' \
 'hooks:Manage repository git hooks' \
+'daemon:Run or inspect the long-lived ingestion coordinator' \
+'cost:Inspect LLM spend recorded in the cost ledger' \
 'completions:Print a shell completion script' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -294,6 +399,54 @@ _wlog__subcmd__completions_commands() {
     local commands; commands=()
     _describe -t commands 'wlog completions commands' commands "$@"
 }
+(( $+functions[_wlog__subcmd__cost_commands] )) ||
+_wlog__subcmd__cost_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog cost commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon_commands] )) ||
+_wlog__subcmd__daemon_commands() {
+    local commands; commands=(
+'run:Run the daemon in the foreground until Ctrl-C' \
+'status:Print whether a daemon socket currently exists' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'wlog daemon commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__help_commands] )) ||
+_wlog__subcmd__daemon__subcmd__help_commands() {
+    local commands; commands=(
+'run:Run the daemon in the foreground until Ctrl-C' \
+'status:Print whether a daemon socket currently exists' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'wlog daemon help commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__help__subcmd__help_commands] )) ||
+_wlog__subcmd__daemon__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog daemon help help commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__help__subcmd__run_commands] )) ||
+_wlog__subcmd__daemon__subcmd__help__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog daemon help run commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__help__subcmd__status_commands] )) ||
+_wlog__subcmd__daemon__subcmd__help__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog daemon help status commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__run_commands] )) ||
+_wlog__subcmd__daemon__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog daemon run commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__daemon__subcmd__status_commands] )) ||
+_wlog__subcmd__daemon__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog daemon status commands' commands "$@"
+}
 (( $+functions[_wlog__subcmd__help_commands] )) ||
 _wlog__subcmd__help_commands() {
     local commands; commands=(
@@ -303,6 +456,8 @@ _wlog__subcmd__help_commands() {
 'show:Show a task with its edges' \
 'ack:Acknowledge, edit, or reject a task' \
 'hooks:Manage repository git hooks' \
+'daemon:Run or inspect the long-lived ingestion coordinator' \
+'cost:Inspect LLM spend recorded in the cost ledger' \
 'completions:Print a shell completion script' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -322,6 +477,29 @@ _wlog__subcmd__help__subcmd__add_commands() {
 _wlog__subcmd__help__subcmd__completions_commands() {
     local commands; commands=()
     _describe -t commands 'wlog help completions commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__help__subcmd__cost_commands] )) ||
+_wlog__subcmd__help__subcmd__cost_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog help cost commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__help__subcmd__daemon_commands] )) ||
+_wlog__subcmd__help__subcmd__daemon_commands() {
+    local commands; commands=(
+'run:Run the daemon in the foreground until Ctrl-C' \
+'status:Print whether a daemon socket currently exists' \
+    )
+    _describe -t commands 'wlog help daemon commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__help__subcmd__daemon__subcmd__run_commands] )) ||
+_wlog__subcmd__help__subcmd__daemon__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog help daemon run commands' commands "$@"
+}
+(( $+functions[_wlog__subcmd__help__subcmd__daemon__subcmd__status_commands] )) ||
+_wlog__subcmd__help__subcmd__daemon__subcmd__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'wlog help daemon status commands' commands "$@"
 }
 (( $+functions[_wlog__subcmd__help__subcmd__help_commands] )) ||
 _wlog__subcmd__help__subcmd__help_commands() {

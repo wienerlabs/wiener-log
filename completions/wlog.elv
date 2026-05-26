@@ -29,6 +29,8 @@ set edit:completion:arg-completer[wlog] = {|@words|
             cand show 'Show a task with its edges'
             cand ack 'Acknowledge, edit, or reject a task'
             cand hooks 'Manage repository git hooks'
+            cand daemon 'Run or inspect the long-lived ingestion coordinator'
+            cand cost 'Inspect LLM spend recorded in the cost ledger'
             cand completions 'Print a shell completion script'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
@@ -124,6 +126,47 @@ set edit:completion:arg-completer[wlog] = {|@words|
         }
         &'wlog;hooks;help;help'= {
         }
+        &'wlog;daemon'= {
+            cand --config 'Path to an explicit config file (overrides discovery)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+            cand run 'Run the daemon in the foreground until Ctrl-C'
+            cand status 'Print whether a daemon socket currently exists'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'wlog;daemon;run'= {
+            cand --socket 'Override the default socket path (XDG_RUNTIME_DIR/wlog.sock)'
+            cand --nats-url 'NATS URL; if unset the daemon just logs incoming payloads'
+            cand --cc-projects-dir 'Path to `~/.claude/projects/` to watch. Unset disables the CC worker. Pass `--cc-projects-dir auto` to use the default'
+            cand --cc-cursor 'Override the CC cursor location'
+            cand --config 'Path to an explicit config file (overrides discovery)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'wlog;daemon;status'= {
+            cand --socket 'Override the default socket path'
+            cand --config 'Path to an explicit config file (overrides discovery)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'wlog;daemon;help'= {
+            cand run 'Run the daemon in the foreground until Ctrl-C'
+            cand status 'Print whether a daemon socket currently exists'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'wlog;daemon;help;run'= {
+        }
+        &'wlog;daemon;help;status'= {
+        }
+        &'wlog;daemon;help;help'= {
+        }
+        &'wlog;cost'= {
+            cand --days 'Number of days to summarize (inclusive of today, UTC)'
+            cand --reports-dir 'Ledger root; defaults to `<cwd>/reports/cost`'
+            cand --config 'Path to an explicit config file (overrides discovery)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
         &'wlog;completions'= {
             cand --config 'Path to an explicit config file (overrides discovery)'
             cand -h 'Print help'
@@ -136,6 +179,8 @@ set edit:completion:arg-completer[wlog] = {|@words|
             cand show 'Show a task with its edges'
             cand ack 'Acknowledge, edit, or reject a task'
             cand hooks 'Manage repository git hooks'
+            cand daemon 'Run or inspect the long-lived ingestion coordinator'
+            cand cost 'Inspect LLM spend recorded in the cost ledger'
             cand completions 'Print a shell completion script'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
@@ -162,6 +207,16 @@ set edit:completion:arg-completer[wlog] = {|@words|
         &'wlog;help;hooks;status'= {
         }
         &'wlog;help;hooks;notify'= {
+        }
+        &'wlog;help;daemon'= {
+            cand run 'Run the daemon in the foreground until Ctrl-C'
+            cand status 'Print whether a daemon socket currently exists'
+        }
+        &'wlog;help;daemon;run'= {
+        }
+        &'wlog;help;daemon;status'= {
+        }
+        &'wlog;help;cost'= {
         }
         &'wlog;help;completions'= {
         }

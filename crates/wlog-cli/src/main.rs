@@ -121,6 +121,15 @@ enum Command {
         #[command(subcommand)]
         action: DaemonAction,
     },
+    /// Inspect LLM spend recorded in the cost ledger.
+    Cost {
+        /// Number of days to summarize (inclusive of today, UTC).
+        #[arg(long, default_value_t = 7)]
+        days: u32,
+        /// Ledger root; defaults to `<cwd>/reports/cost`.
+        #[arg(long, env = "WLOG_COST_REPORTS_DIR")]
+        reports_dir: Option<PathBuf>,
+    },
     /// Print a shell completion script.
     Completions {
         /// Target shell.
@@ -139,6 +148,13 @@ enum DaemonAction {
         /// NATS URL; if unset the daemon just logs incoming payloads.
         #[arg(long, env = "WLOG_NATS_URL")]
         nats_url: Option<String>,
+        /// Path to `~/.claude/projects/` to watch. Unset disables the
+        /// CC worker. Pass `--cc-projects-dir auto` to use the default.
+        #[arg(long, env = "WLOG_CC_PROJECTS_DIR")]
+        cc_projects_dir: Option<PathBuf>,
+        /// Override the CC cursor location.
+        #[arg(long, env = "WLOG_CC_CURSOR")]
+        cc_cursor: Option<PathBuf>,
     },
     /// Print whether a daemon socket currently exists.
     Status {
@@ -232,8 +248,73 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         } => ack(cli.config.as_deref(), id, edit, reject, reason).await,
         Command::Hooks { action } => Ok(hooks(action)),
         Command::Daemon { action } => daemon_cmd(action).await,
+        Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
         Command::Completions { shell } => Ok(completions(shell)),
     }
+}
+
+fn cost(days: u32, reports_dir: Option<PathBuf>) -> ExitCode {
+    use std::collections::BTreeMap;
+
+    use wlog_engine::cost::CostLedger;
+
+    let root = reports_dir.unwrap_or_else(|| PathBuf::from("reports/cost"));
+    let ledger = CostLedger::new(root.clone());
+    let today = chrono::Utc::now().date_naive();
+
+    let mut per_day: Vec<(chrono::NaiveDate, f64, usize)> = Vec::new();
+    let mut per_model: BTreeMap<String, (u64, u64, u64, u64, f64)> = BTreeMap::new();
+    let mut grand_total = 0.0f64;
+    let mut total_rows = 0usize;
+
+    for offset in (0..i64::from(days)).rev() {
+        let date = today - chrono::Duration::days(offset);
+        let entries = match ledger.read_day(date) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("error: read {date}: {e}");
+                return ExitCode::from(1);
+            }
+        };
+        let mut day_total = 0.0f64;
+        for entry in &entries {
+            day_total += entry.usd;
+            grand_total += entry.usd;
+            total_rows += 1;
+            let row = per_model
+                .entry(entry.usage.model.clone())
+                .or_insert((0, 0, 0, 0, 0.0));
+            row.0 += u64::from(entry.usage.input_tokens);
+            row.1 += u64::from(entry.usage.output_tokens);
+            row.2 += u64::from(entry.usage.cache_creation_input_tokens);
+            row.3 += u64::from(entry.usage.cache_read_input_tokens);
+            row.4 += entry.usd;
+        }
+        per_day.push((date, day_total, entries.len()));
+    }
+
+    println!("Cost ledger {}", root.display());
+    println!("Window: last {days} days (UTC, inclusive of today)");
+    println!();
+    println!("{:<12}  {:>10}  {:>10}", "DATE", "ROWS", "USD");
+    println!("{}", "-".repeat(36));
+    for (date, total, rows) in &per_day {
+        println!("{date:<12}  {rows:>10}  {total:>10.4}");
+    }
+    println!("{}", "-".repeat(36));
+    println!("{:<12}  {:>10}  {:>10.4}", "TOTAL", total_rows, grand_total);
+    println!();
+    if !per_model.is_empty() {
+        println!(
+            "{:<32}  {:>10}  {:>10}  {:>10}  {:>10}  {:>10}",
+            "MODEL", "INPUT", "OUTPUT", "CACHE_W", "CACHE_R", "USD"
+        );
+        println!("{}", "-".repeat(96));
+        for (model, (input, output, cw, cr, usd)) in &per_model {
+            println!("{model:<32}  {input:>10}  {output:>10}  {cw:>10}  {cr:>10}  {usd:>10.4}");
+        }
+    }
+    ExitCode::SUCCESS
 }
 
 async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
@@ -242,11 +323,27 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
     use tokio::sync::Notify;
 
     match action {
-        DaemonAction::Run { socket, nats_url } => {
+        DaemonAction::Run {
+            socket,
+            nats_url,
+            cc_projects_dir,
+            cc_cursor,
+        } => {
             let socket = socket.unwrap_or_else(wlog_ingest_git::default_socket_path);
+            // `--cc-projects-dir auto` resolves to the default; any other
+            // value (or the env-var equivalent) is taken verbatim.
+            let cc_projects_dir = cc_projects_dir.map(|p| {
+                if p.as_os_str() == "auto" {
+                    wlog_ingest_cc::default_projects_dir()
+                } else {
+                    p
+                }
+            });
             let config = daemon::DaemonConfig {
                 socket: socket.clone(),
                 nats_url,
+                cc_projects_dir,
+                cc_cursor_path: cc_cursor,
             };
             let shutdown = Arc::new(Notify::new());
             let shutdown_signal = Arc::clone(&shutdown);
@@ -256,8 +353,12 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
                     shutdown_signal.notify_waiters();
                 }
             });
-            let accepted = daemon::run(config, shutdown).await?;
-            tracing::info!(accepted, "daemon shut down cleanly");
+            let stats = daemon::run(config, shutdown).await?;
+            tracing::info!(
+                socket_payloads = stats.socket_payloads,
+                cc_events = stats.cc_events,
+                "daemon shut down cleanly"
+            );
             Ok(ExitCode::SUCCESS)
         }
         DaemonAction::Status { socket } => {

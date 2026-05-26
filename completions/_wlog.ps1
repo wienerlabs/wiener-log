@@ -32,6 +32,8 @@ Register-ArgumentCompleter -Native -CommandName 'wlog' -ScriptBlock {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a task with its edges')
             [CompletionResult]::new('ack', 'ack', [CompletionResultType]::ParameterValue, 'Acknowledge, edit, or reject a task')
             [CompletionResult]::new('hooks', 'hooks', [CompletionResultType]::ParameterValue, 'Manage repository git hooks')
+            [CompletionResult]::new('daemon', 'daemon', [CompletionResultType]::ParameterValue, 'Run or inspect the long-lived ingestion coordinator')
+            [CompletionResult]::new('cost', 'cost', [CompletionResultType]::ParameterValue, 'Inspect LLM spend recorded in the cost ledger')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print a shell completion script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -144,6 +146,55 @@ Register-ArgumentCompleter -Native -CommandName 'wlog' -ScriptBlock {
         'wlog;hooks;help;help' {
             break
         }
+        'wlog;daemon' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to an explicit config file (overrides discovery)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run the daemon in the foreground until Ctrl-C')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print whether a daemon socket currently exists')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'wlog;daemon;run' {
+            [CompletionResult]::new('--socket', '--socket', [CompletionResultType]::ParameterName, 'Override the default socket path (XDG_RUNTIME_DIR/wlog.sock)')
+            [CompletionResult]::new('--nats-url', '--nats-url', [CompletionResultType]::ParameterName, 'NATS URL; if unset the daemon just logs incoming payloads')
+            [CompletionResult]::new('--cc-projects-dir', '--cc-projects-dir', [CompletionResultType]::ParameterName, 'Path to `~/.claude/projects/` to watch. Unset disables the CC worker. Pass `--cc-projects-dir auto` to use the default')
+            [CompletionResult]::new('--cc-cursor', '--cc-cursor', [CompletionResultType]::ParameterName, 'Override the CC cursor location')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to an explicit config file (overrides discovery)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'wlog;daemon;status' {
+            [CompletionResult]::new('--socket', '--socket', [CompletionResultType]::ParameterName, 'Override the default socket path')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to an explicit config file (overrides discovery)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'wlog;daemon;help' {
+            [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run the daemon in the foreground until Ctrl-C')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print whether a daemon socket currently exists')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'wlog;daemon;help;run' {
+            break
+        }
+        'wlog;daemon;help;status' {
+            break
+        }
+        'wlog;daemon;help;help' {
+            break
+        }
+        'wlog;cost' {
+            [CompletionResult]::new('--days', '--days', [CompletionResultType]::ParameterName, 'Number of days to summarize (inclusive of today, UTC)')
+            [CompletionResult]::new('--reports-dir', '--reports-dir', [CompletionResultType]::ParameterName, 'Ledger root; defaults to `<cwd>/reports/cost`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to an explicit config file (overrides discovery)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'wlog;completions' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Path to an explicit config file (overrides discovery)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -157,6 +208,8 @@ Register-ArgumentCompleter -Native -CommandName 'wlog' -ScriptBlock {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a task with its edges')
             [CompletionResult]::new('ack', 'ack', [CompletionResultType]::ParameterValue, 'Acknowledge, edit, or reject a task')
             [CompletionResult]::new('hooks', 'hooks', [CompletionResultType]::ParameterValue, 'Manage repository git hooks')
+            [CompletionResult]::new('daemon', 'daemon', [CompletionResultType]::ParameterValue, 'Run or inspect the long-lived ingestion coordinator')
+            [CompletionResult]::new('cost', 'cost', [CompletionResultType]::ParameterValue, 'Inspect LLM spend recorded in the cost ledger')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print a shell completion script')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -193,6 +246,20 @@ Register-ArgumentCompleter -Native -CommandName 'wlog' -ScriptBlock {
             break
         }
         'wlog;help;hooks;notify' {
+            break
+        }
+        'wlog;help;daemon' {
+            [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run the daemon in the foreground until Ctrl-C')
+            [CompletionResult]::new('status', 'status', [CompletionResultType]::ParameterValue, 'Print whether a daemon socket currently exists')
+            break
+        }
+        'wlog;help;daemon;run' {
+            break
+        }
+        'wlog;help;daemon;status' {
+            break
+        }
+        'wlog;help;cost' {
             break
         }
         'wlog;help;completions' {

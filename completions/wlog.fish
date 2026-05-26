@@ -33,6 +33,8 @@ complete -c wlog -n "__fish_wlog_needs_command" -f -a "ls" -d 'List tasks'
 complete -c wlog -n "__fish_wlog_needs_command" -f -a "show" -d 'Show a task with its edges'
 complete -c wlog -n "__fish_wlog_needs_command" -f -a "ack" -d 'Acknowledge, edit, or reject a task'
 complete -c wlog -n "__fish_wlog_needs_command" -f -a "hooks" -d 'Manage repository git hooks'
+complete -c wlog -n "__fish_wlog_needs_command" -f -a "daemon" -d 'Run or inspect the long-lived ingestion coordinator'
+complete -c wlog -n "__fish_wlog_needs_command" -f -a "cost" -d 'Inspect LLM spend recorded in the cost ledger'
 complete -c wlog -n "__fish_wlog_needs_command" -f -a "completions" -d 'Print a shell completion script'
 complete -c wlog -n "__fish_wlog_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c wlog -n "__fish_wlog_using_subcommand init" -l slug -d 'URL-safe slug, defaults to current directory name' -r
@@ -89,17 +91,42 @@ complete -c wlog -n "__fish_wlog_using_subcommand hooks; and __fish_seen_subcomm
 complete -c wlog -n "__fish_wlog_using_subcommand hooks; and __fish_seen_subcommand_from help" -f -a "status" -d 'Report which hooks are currently managed by wlog'
 complete -c wlog -n "__fish_wlog_using_subcommand hooks; and __fish_seen_subcommand_from help" -f -a "notify" -d 'Internal: hook scripts invoke this to forward an event to the daemon socket. Phase 1 implements the publisher; today this only logs and exits 0 so the hook never fails the user\'s commit'
 complete -c wlog -n "__fish_wlog_using_subcommand hooks; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and not __fish_seen_subcommand_from run status help" -l config -d 'Path to an explicit config file (overrides discovery)' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and not __fish_seen_subcommand_from run status help" -s h -l help -d 'Print help'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and not __fish_seen_subcommand_from run status help" -f -a "run" -d 'Run the daemon in the foreground until Ctrl-C'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and not __fish_seen_subcommand_from run status help" -f -a "status" -d 'Print whether a daemon socket currently exists'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and not __fish_seen_subcommand_from run status help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -l socket -d 'Override the default socket path (XDG_RUNTIME_DIR/wlog.sock)' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -l nats-url -d 'NATS URL; if unset the daemon just logs incoming payloads' -r
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -l cc-projects-dir -d 'Path to `~/.claude/projects/` to watch. Unset disables the CC worker. Pass `--cc-projects-dir auto` to use the default' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -l cc-cursor -d 'Override the CC cursor location' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -l config -d 'Path to an explicit config file (overrides discovery)' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from run" -s h -l help -d 'Print help'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from status" -l socket -d 'Override the default socket path' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from status" -l config -d 'Path to an explicit config file (overrides discovery)' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from status" -s h -l help -d 'Print help'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from help" -f -a "run" -d 'Run the daemon in the foreground until Ctrl-C'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from help" -f -a "status" -d 'Print whether a daemon socket currently exists'
+complete -c wlog -n "__fish_wlog_using_subcommand daemon; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c wlog -n "__fish_wlog_using_subcommand cost" -l days -d 'Number of days to summarize (inclusive of today, UTC)' -r
+complete -c wlog -n "__fish_wlog_using_subcommand cost" -l reports-dir -d 'Ledger root; defaults to `<cwd>/reports/cost`' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand cost" -l config -d 'Path to an explicit config file (overrides discovery)' -r -F
+complete -c wlog -n "__fish_wlog_using_subcommand cost" -s h -l help -d 'Print help'
 complete -c wlog -n "__fish_wlog_using_subcommand completions" -l config -d 'Path to an explicit config file (overrides discovery)' -r -F
 complete -c wlog -n "__fish_wlog_using_subcommand completions" -s h -l help -d 'Print help'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "init" -d 'Bootstrap a workspace: write config, run migrations, verify DB'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "add" -d 'Add a manual task'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "ls" -d 'List tasks'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "show" -d 'Show a task with its edges'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "ack" -d 'Acknowledge, edit, or reject a task'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "hooks" -d 'Manage repository git hooks'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "completions" -d 'Print a shell completion script'
-complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "init" -d 'Bootstrap a workspace: write config, run migrations, verify DB'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "add" -d 'Add a manual task'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "ls" -d 'List tasks'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "show" -d 'Show a task with its edges'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "ack" -d 'Acknowledge, edit, or reject a task'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "hooks" -d 'Manage repository git hooks'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "daemon" -d 'Run or inspect the long-lived ingestion coordinator'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "cost" -d 'Inspect LLM spend recorded in the cost ledger'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "completions" -d 'Print a shell completion script'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and not __fish_seen_subcommand_from init add ls show ack hooks daemon cost completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from hooks" -f -a "install" -d 'Install wlog-managed hooks (post-commit, post-merge, pre-push)'
 complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from hooks" -f -a "uninstall" -d 'Remove wlog-managed hooks; foreign hooks are left untouched'
 complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from hooks" -f -a "status" -d 'Report which hooks are currently managed by wlog'
 complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from hooks" -f -a "notify" -d 'Internal: hook scripts invoke this to forward an event to the daemon socket. Phase 1 implements the publisher; today this only logs and exits 0 so the hook never fails the user\'s commit'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from daemon" -f -a "run" -d 'Run the daemon in the foreground until Ctrl-C'
+complete -c wlog -n "__fish_wlog_using_subcommand help; and __fish_seen_subcommand_from daemon" -f -a "status" -d 'Print whether a daemon socket currently exists'

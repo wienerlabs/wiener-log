@@ -11,9 +11,7 @@ use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 
-use super::{
-    CompletionRequest, CompletionResponse, LlmClient, LlmError, Role, StopReason, Usage,
-};
+use super::{CompletionRequest, CompletionResponse, LlmClient, LlmError, Role, StopReason, Usage};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
 const DEFAULT_VERSION: &str = "2023-06-01";
@@ -264,7 +262,10 @@ enum AnthropicResponseBlock {
     Text { text: String },
 }
 
-#[allow(clippy::struct_field_names, reason = "matches the upstream JSON schema")]
+#[allow(
+    clippy::struct_field_names,
+    reason = "matches the upstream JSON schema"
+)]
 #[derive(Debug, Deserialize)]
 struct AnthropicUsage {
     input_tokens: u32,

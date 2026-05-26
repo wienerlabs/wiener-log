@@ -25,6 +25,12 @@ _wlog() {
             wlog,completions)
                 cmd="wlog__subcmd__completions"
                 ;;
+            wlog,cost)
+                cmd="wlog__subcmd__cost"
+                ;;
+            wlog,daemon)
+                cmd="wlog__subcmd__daemon"
+                ;;
             wlog,help)
                 cmd="wlog__subcmd__help"
                 ;;
@@ -40,6 +46,24 @@ _wlog() {
             wlog,show)
                 cmd="wlog__subcmd__show"
                 ;;
+            wlog__subcmd__daemon,help)
+                cmd="wlog__subcmd__daemon__subcmd__help"
+                ;;
+            wlog__subcmd__daemon,run)
+                cmd="wlog__subcmd__daemon__subcmd__run"
+                ;;
+            wlog__subcmd__daemon,status)
+                cmd="wlog__subcmd__daemon__subcmd__status"
+                ;;
+            wlog__subcmd__daemon__subcmd__help,help)
+                cmd="wlog__subcmd__daemon__subcmd__help__subcmd__help"
+                ;;
+            wlog__subcmd__daemon__subcmd__help,run)
+                cmd="wlog__subcmd__daemon__subcmd__help__subcmd__run"
+                ;;
+            wlog__subcmd__daemon__subcmd__help,status)
+                cmd="wlog__subcmd__daemon__subcmd__help__subcmd__status"
+                ;;
             wlog__subcmd__help,ack)
                 cmd="wlog__subcmd__help__subcmd__ack"
                 ;;
@@ -48,6 +72,12 @@ _wlog() {
                 ;;
             wlog__subcmd__help,completions)
                 cmd="wlog__subcmd__help__subcmd__completions"
+                ;;
+            wlog__subcmd__help,cost)
+                cmd="wlog__subcmd__help__subcmd__cost"
+                ;;
+            wlog__subcmd__help,daemon)
+                cmd="wlog__subcmd__help__subcmd__daemon"
                 ;;
             wlog__subcmd__help,help)
                 cmd="wlog__subcmd__help__subcmd__help"
@@ -63,6 +93,12 @@ _wlog() {
                 ;;
             wlog__subcmd__help,show)
                 cmd="wlog__subcmd__help__subcmd__show"
+                ;;
+            wlog__subcmd__help__subcmd__daemon,run)
+                cmd="wlog__subcmd__help__subcmd__daemon__subcmd__run"
+                ;;
+            wlog__subcmd__help__subcmd__daemon,status)
+                cmd="wlog__subcmd__help__subcmd__daemon__subcmd__status"
                 ;;
             wlog__subcmd__help__subcmd__hooks,install)
                 cmd="wlog__subcmd__help__subcmd__hooks__subcmd__install"
@@ -113,7 +149,7 @@ _wlog() {
 
     case "${cmd}" in
         wlog)
-            opts="-h -V --config --help --version init add ls show ack hooks completions help"
+            opts="-h -V --config --help --version init add ls show ack hooks daemon cost completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -200,8 +236,164 @@ _wlog() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        wlog__subcmd__cost)
+            opts="-h --days --reports-dir --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --days)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --reports-dir)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon)
+            opts="-h --config --help run status help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__help)
+            opts="run status help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__help__subcmd__run)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__help__subcmd__status)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__run)
+            opts="-h --socket --nats-url --cc-projects-dir --cc-cursor --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --socket)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --nats-url)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --cc-projects-dir)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --cc-cursor)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__daemon__subcmd__status)
+            opts="-h --socket --config --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --socket)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         wlog__subcmd__help)
-            opts="init add ls show ack hooks completions help"
+            opts="init add ls show ack hooks daemon cost completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -245,6 +437,62 @@ _wlog() {
         wlog__subcmd__help__subcmd__completions)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__help__subcmd__cost)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__help__subcmd__daemon)
+            opts="run status"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__help__subcmd__daemon__subcmd__run)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wlog__subcmd__help__subcmd__daemon__subcmd__status)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

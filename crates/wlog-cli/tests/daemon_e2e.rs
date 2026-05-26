@@ -46,6 +46,8 @@ async fn daemon_publishes_hook_payloads_to_nats() -> Result<()> {
     let config = DaemonConfig {
         socket: socket.clone(),
         nats_url: Some(nats_url.clone()),
+        cc_projects_dir: None,
+        cc_cursor_path: None,
     };
     let shutdown = Arc::new(Notify::new());
 
@@ -97,8 +99,9 @@ async fn daemon_publishes_hook_payloads_to_nats() -> Result<()> {
 
     // Tear down.
     shutdown.notify_waiters();
-    let accepted = timeout(Duration::from_secs(5), daemon_task).await???;
-    assert_eq!(accepted, 1);
+    let stats = timeout(Duration::from_secs(5), daemon_task).await???;
+    assert_eq!(stats.socket_payloads, 1);
+    assert_eq!(stats.cc_events, 0);
 
     Ok(())
 }
