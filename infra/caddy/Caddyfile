@@ -1,0 +1,39 @@
+# WienerLog production reverse proxy.
+# Replace `wlog.example.com` with the actual domain before applying.
+# Cloudflare DNS challenge avoids public port 80 reach.
+
+{
+    email ops@wienerlabs.xyz
+    admin off
+    log {
+        output stdout
+        format json
+    }
+}
+
+wlog.example.com {
+    encode zstd gzip
+
+    # GitHub webhooks land at the daemon's gh-listen port.
+    @webhook path /github-webhook
+    handle @webhook {
+        reverse_proxy daemon:8787
+    }
+
+    # Read-only API.
+    @api path /api/*
+    handle @api {
+        uri strip_prefix /api
+        reverse_proxy web:8088
+    }
+
+    # Health endpoint exposed for healthchecks.io.
+    @health path /healthz
+    handle @health {
+        reverse_proxy web:8088
+    }
+
+    handle {
+        respond "WienerLog" 200
+    }
+}

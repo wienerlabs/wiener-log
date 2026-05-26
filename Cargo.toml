@@ -9,10 +9,11 @@ members = [
     "crates/wlog-ingest-gh",
     "crates/wlog-proto",
     "crates/wlog-testutil",
+    "crates/wlog-web",
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-or-later"
@@ -23,14 +24,15 @@ readme = "README.md"
 
 [workspace.dependencies]
 # Internal crates
-wlog-cli = { path = "crates/wlog-cli", version = "0.0.1" }
-wlog-engine = { path = "crates/wlog-engine", version = "0.0.1" }
-wlog-storage = { path = "crates/wlog-storage", version = "0.0.1" }
-wlog-ingest-git = { path = "crates/wlog-ingest-git", version = "0.0.1" }
-wlog-ingest-cc = { path = "crates/wlog-ingest-cc", version = "0.0.1" }
-wlog-ingest-gh = { path = "crates/wlog-ingest-gh", version = "0.0.1" }
-wlog-proto = { path = "crates/wlog-proto", version = "0.0.1" }
-wlog-testutil = { path = "crates/wlog-testutil", version = "0.0.1" }
+wlog-cli = { path = "crates/wlog-cli", version = "0.1.0" }
+wlog-engine = { path = "crates/wlog-engine", version = "0.1.0" }
+wlog-storage = { path = "crates/wlog-storage", version = "0.1.0" }
+wlog-ingest-git = { path = "crates/wlog-ingest-git", version = "0.1.0" }
+wlog-ingest-cc = { path = "crates/wlog-ingest-cc", version = "0.1.0" }
+wlog-ingest-gh = { path = "crates/wlog-ingest-gh", version = "0.1.0" }
+wlog-proto = { path = "crates/wlog-proto", version = "0.1.0" }
+wlog-testutil = { path = "crates/wlog-testutil", version = "0.1.0" }
+wlog-web = { path = "crates/wlog-web", version = "0.1.0" }
 
 # Async runtime
 tokio = { version = "1.42", features = ["full"] }
@@ -132,6 +134,9 @@ unused_async = "allow"
 default_trait_access = "allow"
 needless_collect = "allow"
 redundant_closure_for_method_calls = "allow"
+manual_let_else = "allow"
+unnested_or_patterns = "allow"
+items_after_statements = "allow"
 
 [profile.release]
 opt-level = 3

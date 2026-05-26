@@ -4176,7 +4176,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4207,7 +4207,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-engine"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4231,7 +4231,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-ingest-cc"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4251,7 +4251,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-ingest-gh"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4275,7 +4275,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-ingest-git"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4293,7 +4293,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-proto"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
@@ -4304,7 +4304,7 @@ dependencies = [
 
 [[package]]
 name = "wlog-storage"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4323,12 +4323,34 @@ dependencies = [
 
 [[package]]
 name = "wlog-testutil"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "serde_json",
  "uuid",
  "wlog-proto",
+]
+
+[[package]]
+name = "wlog-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wlog-proto",
+ "wlog-storage",
 ]
 
 [[package]]

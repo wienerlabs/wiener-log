@@ -383,29 +383,44 @@ async fn search(
     })
     .await?;
     let tasks = TaskRepo::new(pool);
-    let rows = tasks
-        .list(
-            loaded.config.workspace.workspace_id(),
-            TaskListFilter {
-                status: None,
-                repo: None,
-                owner: None,
-                limit: Some(limit * 4),
-            },
-        )
-        .await?;
-    let needle = query.to_lowercase();
-    let mut matches: Vec<_> = rows
-        .into_iter()
-        .filter(|t| {
-            t.title.to_lowercase().contains(&needle)
-                || t.body
-                    .as_deref()
-                    .is_some_and(|b| b.to_lowercase().contains(&needle))
-        })
-        .take(usize::try_from(limit).unwrap_or(10))
-        .collect();
-    matches.truncate(usize::try_from(limit).unwrap_or(10));
+
+    let matches: Vec<wlog_proto::TaskNode> = if let Ok(api_key) = std::env::var("OPENAI_API_KEY")
+        && !api_key.is_empty()
+    {
+        use wlog_engine::embed::{EmbeddingProvider, OpenAiEmbedder, OpenAiEmbedderConfig};
+        let embedder = OpenAiEmbedder::new(OpenAiEmbedderConfig::from_api_key(api_key))?;
+        let batch = embedder.embed_batch(&[query.as_str()]).await?;
+        let qv = batch.vectors.into_iter().next().unwrap_or_default();
+        let hits = tasks
+            .find_similar(loaded.config.workspace.workspace_id(), qv, limit)
+            .await?;
+        if hits.is_empty() {
+            eprintln!("no embedded tasks yet; populate embeddings then retry");
+        }
+        hits.into_iter().map(|(t, _)| t).collect()
+    } else {
+        let rows = tasks
+            .list(
+                loaded.config.workspace.workspace_id(),
+                TaskListFilter {
+                    status: None,
+                    repo: None,
+                    owner: None,
+                    limit: Some(limit * 4),
+                },
+            )
+            .await?;
+        let needle = query.to_lowercase();
+        rows.into_iter()
+            .filter(|t| {
+                t.title.to_lowercase().contains(&needle)
+                    || t.body
+                        .as_deref()
+                        .is_some_and(|b| b.to_lowercase().contains(&needle))
+            })
+            .take(usize::try_from(limit).unwrap_or(10))
+            .collect()
+    };
     let mut stdout = std::io::stdout().lock();
     output::print_tasks(&mut stdout, &matches, format)?;
     Ok(ExitCode::SUCCESS)
@@ -1253,7 +1268,17 @@ async fn ack(
         max_connections: loaded.config.storage.max_connections,
     })
     .await?;
-    let tasks = TaskRepo::new(pool);
+    let tasks = TaskRepo::new(pool.clone());
+    let edits_repo = wlog_storage::TaskEditRepo::new(pool.clone());
+    let users_repo = UserRepo::new(pool);
+    let me = users_repo
+        .get_by_handle(
+            loaded.config.workspace.workspace_id(),
+            &loaded.config.workspace.user_handle,
+        )
+        .await
+        .ok()
+        .map(|u| u.id);
     let resolved = resolve_task_id(&tasks, &loaded.config.workspace, &id).await?;
     let tid = match resolved {
         ResolvedId::Single(t) => t,
@@ -1270,7 +1295,18 @@ async fn ack(
         }
     };
     if reject {
+        let current = tasks.get(tid).await?;
         let updated = tasks.set_status(tid, TaskStatus::Rejected).await?;
+        let _ = edits_repo
+            .create(wlog_storage::NewTaskEdit {
+                workspace_id: loaded.config.workspace.workspace_id(),
+                task_id: tid,
+                editor: me,
+                field: "status".into(),
+                before: Some(current.status.as_str().to_string()),
+                after: Some(TaskStatus::Rejected.as_str().to_string()),
+            })
+            .await;
         let suffix = reason
             .as_ref()
             .map(|r| format!(" ({r})"))
@@ -1281,11 +1317,48 @@ async fn ack(
     if edit {
         let current = tasks.get(tid).await?;
         let edited = run_editor(&current.title, current.body.as_deref())?;
-        tasks
+        let after = tasks
             .update_text(tid, &edited.title, edited.body.as_deref())
             .await?;
+        if current.title != after.title {
+            let _ = edits_repo
+                .create(wlog_storage::NewTaskEdit {
+                    workspace_id: loaded.config.workspace.workspace_id(),
+                    task_id: tid,
+                    editor: me,
+                    field: "title".into(),
+                    before: Some(current.title.clone()),
+                    after: Some(after.title.clone()),
+                })
+                .await;
+        }
+        if current.body != after.body {
+            let _ = edits_repo
+                .create(wlog_storage::NewTaskEdit {
+                    workspace_id: loaded.config.workspace.workspace_id(),
+                    task_id: tid,
+                    editor: me,
+                    field: "body".into(),
+                    before: current.body.clone(),
+                    after: after.body.clone(),
+                })
+                .await;
+        }
     }
+    let before = tasks.get(tid).await?;
     let updated = tasks.set_status(tid, TaskStatus::Acked).await?;
+    if before.status != TaskStatus::Acked {
+        let _ = edits_repo
+            .create(wlog_storage::NewTaskEdit {
+                workspace_id: loaded.config.workspace.workspace_id(),
+                task_id: tid,
+                editor: me,
+                field: "status".into(),
+                before: Some(before.status.as_str().to_string()),
+                after: Some(TaskStatus::Acked.as_str().to_string()),
+            })
+            .await;
+    }
     println!("acked {}", updated.id.short());
     Ok(ExitCode::SUCCESS)
 }

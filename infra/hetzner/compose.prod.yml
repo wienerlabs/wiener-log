@@ -1,0 +1,85 @@
+name: wlog-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
+    restart: always
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/pg_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+      POSTGRES_DB: wlog
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /home/wlog/state/postgres:/var/lib/postgresql/data
+    secrets:
+      - pg_user
+      - pg_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/pg_user)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  nats:
+    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+    restart: always
+    command: ["-js", "-m", "8222", "--store_dir", "/data", "--name", "wlog-nats"]
+    volumes:
+      - /home/wlog/state/nats:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  daemon:
+    image: ghcr.io/wienerlabs/wienerlog:${WLOG_VERSION:-latest}
+    restart: always
+    command: ["wlog", "daemon", "run", "--nats-url", "nats://nats:4222", "--gh-listen", "0.0.0.0:8787"]
+    environment:
+      WLOG_DAEMON_WORKSPACE: ${WLOG_WORKSPACE:-prod}
+      RUST_LOG: info
+    env_file:
+      - /home/wlog/state/daemon.env
+    volumes:
+      - /home/wlog/state/socket:/run/wlog
+      - /home/wlog/state/cc:/var/lib/wlog/cc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  web:
+    image: ghcr.io/wienerlabs/wienerlog:${WLOG_VERSION:-latest}
+    restart: always
+    command: ["wlog-web", "--listen", "0.0.0.0:8088"]
+    environment:
+      WLOG_DATABASE_URL: postgres://wlog@postgres:5432/wlog
+      RUST_LOG: info
+    env_file:
+      - /home/wlog/state/web.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/wlog/state/caddy:/data
+      - /home/wlog/state/caddy-config:/config
+    depends_on:
+      - web
+
+secrets:
+  pg_user:
+    file: /home/wlog/state/secrets/pg_user
+  pg_password:
+    file: /home/wlog/state/secrets/pg_password

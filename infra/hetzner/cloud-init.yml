@@ -1,0 +1,56 @@
+#cloud-config
+# First-boot provisioning for a WienerLog Hetzner host.
+# Apply with: hcloud server create --image debian-12 --user-data-from-file cloud-init.yml ...
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - htop
+
+users:
+  - name: wlog
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ssh-ed25519 PLACEHOLDER_REPLACE_BEFORE_USE wlog@hetzner
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-wlog.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      Port 2222
+  - path: /etc/sysctl.d/99-wlog.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.tcp_syncookies = 1
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv6.conf.all.disable_ipv6 = 0
+
+runcmd:
+  - systemctl restart ssh
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 2222/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  - install -m 0700 -d /home/wlog/wienerlog
+  - install -m 0700 -d /home/wlog/state
+  - chown -R wlog:wlog /home/wlog/wienerlog /home/wlog/state
+  - curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker wlog
+  - systemctl enable --now docker fail2ban
+
+final_message: "WienerLog host ready in $UPTIME seconds. SSH on port 2222."

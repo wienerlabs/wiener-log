@@ -78,6 +78,22 @@ impl TaskRow {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct TaskDistRow {
+    id: uuid::Uuid,
+    workspace_id: uuid::Uuid,
+    node_type: DbNodeType,
+    title: String,
+    body: Option<String>,
+    repo: Option<String>,
+    owner_user_id: Option<uuid::Uuid>,
+    status: String,
+    embedding_present: bool,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    distance: f64,
+}
+
 /// Columns shared between SELECT, INSERT RETURNING, and UPDATE RETURNING.
 const TASK_COLUMNS: &str = "id, workspace_id, node_type, title, body, repo, owner_user_id, \
     status, (embedding IS NOT NULL) AS embedding_present, created_at, updated_at";
@@ -159,6 +175,59 @@ impl TaskRepo {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows.into_iter().map(|(u,)| TaskId(u)).collect())
+    }
+
+    /// Cosine-similarity search via pgvector. Returns rows with the
+    /// embedding present, ordered by closeness. The accompanying f32
+    /// is the cosine distance (lower is closer).
+    pub async fn find_similar(
+        &self,
+        workspace_id: WorkspaceId,
+        query_vec: Vec<f32>,
+        limit: i64,
+    ) -> Result<Vec<(TaskNode, f32)>, StorageError> {
+        let pgvec = pgvector::Vector::from(query_vec);
+        let sql = format!(
+            "SELECT {TASK_COLUMNS}, (embedding <=> $2)::float8 AS distance \
+             FROM tasks WHERE workspace_id = $1 AND embedding IS NOT NULL \
+             ORDER BY embedding <=> $2 LIMIT $3"
+        );
+        let rows: Vec<TaskDistRow> = sqlx::query_as(AssertSqlSafe(sql))
+            .bind(workspace_id.0)
+            .bind(pgvec)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.into_iter()
+            .map(|r| {
+                let dist = r.distance as f32;
+                let row = TaskRow {
+                    id: r.id,
+                    workspace_id: r.workspace_id,
+                    node_type: r.node_type,
+                    title: r.title,
+                    body: r.body,
+                    repo: r.repo,
+                    owner_user_id: r.owner_user_id,
+                    status: r.status,
+                    embedding_present: r.embedding_present,
+                    created_at: r.created_at,
+                    updated_at: r.updated_at,
+                };
+                row.into_node().map(|n| (n, dist))
+            })
+            .collect()
+    }
+
+    /// Write or replace the embedding vector for a task.
+    pub async fn set_embedding(&self, id: TaskId, vec: Vec<f32>) -> Result<(), StorageError> {
+        let pgvec = pgvector::Vector::from(vec);
+        sqlx::query("UPDATE tasks SET embedding = $1 WHERE id = $2")
+            .bind(pgvec)
+            .bind(id.0)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     /// List tasks for a workspace, optionally filtered.
