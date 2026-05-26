@@ -25,13 +25,50 @@ use self::output::Format;
 #[command(
     name = "wlog",
     version,
-    about = "WienerLog command line interface",
-    long_about = "Activity-aware task synthesis. The system watches; you confirm."
+    about = "WienerLog: activity-aware task synthesis",
+    long_about = "\
+WienerLog (`wlog`) observes git, Claude Code, and GitHub activity and
+proposes tasks for you to confirm. You never write standup notes
+manually; the system watches, you ack or edit.
+
+EXAMPLES
+  Bootstrap a workspace and verify install:
+      wlog init --slug me --name \"Me\"
+      wlog status
+      wlog hooks install
+
+  Daily flow:
+      wlog daily
+      wlog ack <id>
+      wlog ack <id> --edit
+      wlog search \"auth flow\"
+
+  Run the long-lived ingestor:
+      wlog daemon run --nats-url nats://127.0.0.1:4222
+
+  Operator (founder) view:
+      wlog admin tail
+      wlog admin users
+      wlog admin workspaces
+
+  Diagnostics:
+      wlog doctor
+      wlog where
+      wlog about
+
+See docs/onboarding.md (employees) and docs/control-plane.md (operator).
+"
 )]
 struct Cli {
     /// Path to an explicit config file (overrides discovery).
     #[arg(long, global = true, env = "WLOG_CONFIG")]
     config: Option<PathBuf>,
+    /// Suppress informational output (errors still print).
+    #[arg(long, short = 'q', global = true, env = "WLOG_QUIET")]
+    quiet: bool,
+    /// Disable ANSI color regardless of TTY detection.
+    #[arg(long, global = true, env = "NO_COLOR")]
+    no_color: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -192,6 +229,16 @@ enum Command {
         #[arg(long, env = "WLOG_NATS_URL")]
         nats_url: Option<String>,
     },
+    /// Print the resolved paths wlog uses (binary, config, socket, cache).
+    Where,
+    /// Detailed build, version, and environment info.
+    About,
+    /// Run an extended health check (status + version + disk + uptime).
+    Doctor {
+        /// Skip remote probes (NATS + Postgres).
+        #[arg(long)]
+        offline: bool,
+    },
     /// Operator surface for cross-workspace queries (founder-only).
     Admin {
         #[command(subcommand)]
@@ -318,10 +365,16 @@ async fn main() -> ExitCode {
         .with_writer(std::io::stderr)
         .init();
     let cli = Cli::parse();
+    if cli.no_color {
+        wlog_cli::ui::set_color_override(-1);
+    }
+    if cli.quiet {
+        wlog_cli::ui::set_quiet(true);
+    }
     match run(cli).await {
         Ok(code) => code,
         Err(err) => {
-            eprintln!("error: {err:#}");
+            wlog_cli::ui::error(format!("{err:#}"));
             ExitCode::from(1)
         }
     }
@@ -380,6 +433,9 @@ async fn run(cli: Cli) -> Result<ExitCode> {
             no_db,
             nats_url,
         } => status_cmd(cli.config.as_deref(), no_nats, no_db, nats_url).await,
+        Command::Where => Ok(where_cmd()),
+        Command::About => Ok(about_cmd()),
+        Command::Doctor { offline } => doctor_cmd(cli.config.as_deref(), offline).await,
         Command::Admin { action } => admin_cmd(action).await,
         Command::Completions { shell } => Ok(completions(shell)),
     }
@@ -398,24 +454,33 @@ async fn status_cmd(
     nats_url_override: Option<String>,
 ) -> Result<ExitCode> {
     use std::time::Instant;
+    use wlog_cli::ui;
 
-    println!("wlog status");
-    println!("===========");
+    ui::banner_heading("wlog status");
 
     let mut all_ok = true;
+    let mut warns: Vec<String> = Vec::new();
 
+    // -- daemon socket -----------------------------------------------------
     let socket_path = wlog_ingest_git::default_socket_path();
     let socket_present = socket_path.exists();
-    println!(
-        "{} daemon socket    {}",
-        check_mark(socket_present),
-        socket_path.display()
-    );
-    if !socket_present {
+    if socket_present {
+        ui::line(
+            ui::Status::Ok,
+            "daemon socket",
+            &socket_path.display().to_string(),
+        );
+    } else {
+        ui::line(
+            ui::Status::Fail,
+            "daemon socket",
+            &socket_path.display().to_string(),
+        );
+        warns.push("start the daemon (`wlog daemon run` or your systemd/launchd unit)".to_string());
         all_ok = false;
-        println!("    hint: start the daemon (`wlog daemon run` or systemd/launchd unit)");
     }
 
+    // -- git hooks ---------------------------------------------------------
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let in_repo = cwd.join(".git").exists();
     if in_repo {
@@ -425,60 +490,64 @@ async fn status_cmd(
                     .entries
                     .iter()
                     .all(|(_, outcome)| matches!(outcome, wlog_ingest_git::HookAction::Installed));
-                println!(
-                    "{} git hooks        {}",
-                    check_mark(installed),
-                    cwd.display()
-                );
-                if !installed {
-                    all_ok = false;
+                let label = cwd.display().to_string();
+                if installed {
+                    ui::line(ui::Status::Ok, "git hooks", &label);
+                } else {
+                    ui::line(ui::Status::Fail, "git hooks", &label);
                     for (kind, outcome) in &report.entries {
                         if !matches!(outcome, wlog_ingest_git::HookAction::Installed) {
-                            println!("    {kind:?}: {outcome:?}");
+                            println!("       {} {:?}: {:?}", ui::dim("·"), kind, outcome);
                         }
                     }
-                    println!("    hint: `wlog hooks install` from inside the repo");
+                    warns.push("run `wlog hooks install` from inside the repo".to_string());
+                    all_ok = false;
                 }
             }
             Err(e) => {
+                ui::line(
+                    ui::Status::Warn,
+                    "git hooks",
+                    &format!("unable to read ({e})"),
+                );
                 all_ok = false;
-                println!("? git hooks        unable to read ({e})");
             }
         }
     } else {
-        println!("- git hooks        not in a git repo (skipped)");
+        ui::line(ui::Status::Neutral, "git hooks", "not in a git repo");
     }
 
+    // -- NATS --------------------------------------------------------------
     let nats_url = nats_url_override
         .or_else(|| std::env::var("WLOG_NATS_URL").ok())
         .unwrap_or_else(|| "nats://127.0.0.1:4222".to_string());
     if no_nats {
-        println!("- NATS             skipped (--no-nats)");
+        ui::line(ui::Status::Neutral, "NATS", "skipped (--no-nats)");
     } else {
         let start = Instant::now();
         match async_nats::connect(&nats_url).await {
             Ok(client) => match client.flush().await {
                 Ok(()) => {
                     let elapsed = start.elapsed();
-                    println!(
-                        "{} NATS             {nats_url} (round-trip {elapsed:?})",
-                        check_mark(true)
-                    );
+                    let detail = format!("{nats_url} ({} round-trip)", format_dur(elapsed));
+                    ui::line(ui::Status::Ok, "NATS", &detail);
                 }
                 Err(e) => {
+                    ui::line(ui::Status::Fail, "NATS", &format!("flush failed: {e}"));
                     all_ok = false;
-                    println!("{} NATS             flush failed: {e}", check_mark(false));
                 }
             },
             Err(e) => {
+                ui::line(ui::Status::Fail, "NATS", &format!("{nats_url} -> {e}"));
+                warns.push("ensure NATS is reachable; for local: `docker compose -f infra/docker-compose.yml up -d nats`".to_string());
                 all_ok = false;
-                println!("{} NATS             {nats_url} -> {e}", check_mark(false));
             }
         }
     }
 
+    // -- Postgres ---------------------------------------------------------
     if no_db {
-        println!("- Postgres         skipped (--no-db)");
+        ui::line(ui::Status::Neutral, "Postgres", "skipped (--no-db)");
     } else {
         match config::load(config_path) {
             Ok(loaded) => {
@@ -489,46 +558,210 @@ async fn status_cmd(
                 let url = cfg.url.clone();
                 match connect(&cfg).await {
                     Ok(pool) => match healthcheck(&pool).await {
-                        Ok(()) => println!("{} Postgres         {url}", check_mark(true)),
+                        Ok(()) => ui::line(ui::Status::Ok, "Postgres", &url),
                         Err(e) => {
-                            all_ok = false;
-                            println!(
-                                "{} Postgres         {url} -> healthcheck failed: {e}",
-                                check_mark(false)
+                            ui::line(
+                                ui::Status::Fail,
+                                "Postgres",
+                                &format!("{url} -> healthcheck failed: {e}"),
                             );
+                            all_ok = false;
                         }
                     },
                     Err(e) => {
+                        ui::line(ui::Status::Fail, "Postgres", &format!("{url} -> {e}"));
                         all_ok = false;
-                        println!(
-                            "{} Postgres         {url} -> connect failed: {e}",
-                            check_mark(false)
-                        );
                     }
                 }
             }
             Err(ConfigError::NotFound) => {
-                println!("- Postgres         no wlog.toml; run `wlog init` (skipped)");
+                ui::line(
+                    ui::Status::Neutral,
+                    "Postgres",
+                    "no wlog.toml; run `wlog init` (skipped)",
+                );
             }
             Err(e) => {
+                ui::line(ui::Status::Fail, "Postgres", &format!("config error: {e}"));
                 all_ok = false;
-                println!("{} Postgres         config error: {e}", check_mark(false));
             }
         }
     }
 
     println!();
     if all_ok {
-        println!("OK: wlog is healthy on this machine.");
+        ui::success("wlog is healthy on this machine.");
         Ok(ExitCode::SUCCESS)
     } else {
-        println!("FAIL: see hints above.");
+        ui::error("one or more components are not ready");
+        for w in warns {
+            ui::hint(w);
+        }
         Ok(ExitCode::from(1))
     }
 }
 
-const fn check_mark(ok: bool) -> &'static str {
-    if ok { "+" } else { "x" }
+fn format_dur(d: std::time::Duration) -> String {
+    let ms = d.as_secs_f64() * 1000.0;
+    if ms < 1.0 {
+        format!("{:.0}µs", d.as_micros())
+    } else if ms < 1000.0 {
+        format!("{ms:.1}ms")
+    } else {
+        format!("{:.2}s", d.as_secs_f64())
+    }
+}
+
+fn where_cmd() -> ExitCode {
+    use wlog_cli::ui;
+
+    ui::banner_heading("wlog paths");
+
+    let binary = std::env::current_exe()
+        .ok()
+        .map_or_else(|| "<unknown>".to_string(), |p| p.display().to_string());
+    let cwd = std::env::current_dir()
+        .ok()
+        .map_or_else(|| "<unknown>".to_string(), |p| p.display().to_string());
+    let xdg_config =
+        std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", home_dir()));
+    let xdg_cache =
+        std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| format!("{}/.cache", home_dir()));
+    let xdg_data =
+        std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{}/.local/share", home_dir()));
+    let socket = wlog_ingest_git::default_socket_path();
+    let cc_dir = wlog_ingest_cc::default_projects_dir();
+    let nats = std::env::var("WLOG_NATS_URL").unwrap_or_else(|_| "<unset>".to_string());
+    let db = std::env::var("WLOG_DATABASE_URL").unwrap_or_else(|_| "<unset>".to_string());
+
+    let rows: Vec<(&str, String)> = vec![
+        ("binary", binary),
+        ("cwd", cwd),
+        ("config dir", format!("{xdg_config}/wlog")),
+        ("cache dir", format!("{xdg_cache}/wlog")),
+        ("data dir", format!("{xdg_data}/wlog")),
+        ("daemon socket", socket.display().to_string()),
+        ("cc projects", cc_dir.display().to_string()),
+        ("WLOG_NATS_URL", nats),
+        ("WLOG_DATABASE_URL", redact_url(&db)),
+    ];
+
+    ui::kv_table(&rows);
+    ExitCode::SUCCESS
+}
+
+fn redact_url(raw: &str) -> String {
+    if raw == "<unset>" {
+        return raw.to_string();
+    }
+    if let Some((scheme, rest)) = raw.split_once("://")
+        && let Some(at) = rest.find('@')
+        && let Some((user, _pw)) = rest[..at].split_once(':')
+    {
+        return format!("{scheme}://{user}:***@{}", &rest[at + 1..]);
+    }
+    raw.to_string()
+}
+
+fn home_dir() -> String {
+    std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+}
+
+fn about_cmd() -> ExitCode {
+    use wlog_cli::ui;
+
+    ui::banner_heading("wlog about");
+
+    let rows: Vec<(&str, String)> = vec![
+        ("version", env!("CARGO_PKG_VERSION").to_string()),
+        ("name", env!("CARGO_PKG_NAME").to_string()),
+        ("description", env!("CARGO_PKG_DESCRIPTION").to_string()),
+        ("license", env!("CARGO_PKG_LICENSE").to_string()),
+        ("repository", env!("CARGO_PKG_REPOSITORY").to_string()),
+        (
+            "target",
+            std::env::consts::ARCH.to_string() + "-" + std::env::consts::OS,
+        ),
+        (
+            "rustc (build)",
+            option_env!("RUSTC_VERSION")
+                .unwrap_or("unknown")
+                .to_string(),
+        ),
+        ("os family", std::env::consts::FAMILY.to_string()),
+    ];
+    ui::kv_table(&rows);
+
+    println!();
+    println!("{}", ui::dim("Detailed environment: run `wlog doctor`."));
+    ExitCode::SUCCESS
+}
+
+async fn doctor_cmd(config_path: Option<&std::path::Path>, offline: bool) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
+    ui::banner_heading("wlog doctor");
+
+    // Section 1: identity
+    ui::section("identity");
+    ui::kv("version", env!("CARGO_PKG_VERSION"));
+    ui::kv(
+        "target",
+        format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+    );
+    ui::kv(
+        "binary",
+        std::env::current_exe()
+            .map_or_else(|_| "<unknown>".to_string(), |p| p.display().to_string()),
+    );
+    ui::kv("pid", std::process::id());
+
+    // Section 2: components (re-run status checks)
+    ui::section("components");
+    let status_exit = status_cmd(config_path, offline, offline, None).await?;
+
+    // Section 3: docker (best-effort)
+    ui::section("docker");
+    match tokio::process::Command::new("docker")
+        .arg("ps")
+        .arg("--filter")
+        .arg("name=wlog")
+        .arg("--format")
+        .arg("{{.Names}}\t{{.Status}}")
+        .output()
+        .await
+    {
+        Ok(out) if out.status.success() => {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                ui::line(ui::Status::Neutral, "containers", "none matching `wlog`");
+            } else {
+                let mut table = ui::table(&["NAME", "STATUS"]);
+                for ln in trimmed.lines() {
+                    let mut parts = ln.split('\t');
+                    let name = parts.next().unwrap_or("").to_string();
+                    let st = parts.next().unwrap_or("").to_string();
+                    table.add_row(vec![name, st]);
+                }
+                println!("{table}");
+            }
+        }
+        Ok(_) | Err(_) => {
+            ui::line(ui::Status::Neutral, "containers", "docker not available");
+        }
+    }
+
+    // Section 4: footer
+    println!();
+    ui::divider();
+    if status_exit == ExitCode::SUCCESS {
+        ui::success("doctor: all green.");
+        Ok(ExitCode::SUCCESS)
+    } else {
+        ui::warning("doctor: see hints above");
+        Ok(status_exit)
+    }
 }
 
 async fn admin_cmd(action: AdminAction) -> Result<ExitCode> {
@@ -565,6 +798,8 @@ fn resolve_admin_db_url(explicit: Option<String>) -> Result<String> {
 }
 
 async fn admin_users(database_url: Option<String>, limit: i64) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
     let url = resolve_admin_db_url(database_url)?;
     let pool = connect(&StorageConfig {
         url,
@@ -582,11 +817,9 @@ async fn admin_users(database_url: Option<String>, limit: i64) -> Result<ExitCod
         .collect();
 
     let rows = users.list_all(limit).await?;
-    println!(
-        "{:<24}  {:<22}  {:<32}  {:<20}",
-        "WORKSPACE", "HANDLE", "EMAIL", "CREATED"
-    );
-    println!("{}", "-".repeat(102));
+    ui::banner_heading("users");
+
+    let mut table = ui::table(&["WORKSPACE", "HANDLE", "EMAIL", "CREATED"]);
     for u in &rows {
         let ws = ws_index
             .get(&u.workspace_id)
@@ -594,17 +827,21 @@ async fn admin_users(database_url: Option<String>, limit: i64) -> Result<ExitCod
             .unwrap_or_else(|| "<orphan>".to_string());
         let email = u.email.as_deref().unwrap_or("-");
         let created = u.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
-        println!(
-            "{ws:<24}  {handle:<22}  {email:<32}  {created:<20}",
-            handle = u.handle
-        );
+        table.add_row(vec![ws, u.handle.clone(), email.to_string(), created]);
     }
+    println!("{table}");
     println!();
-    println!("{} users total", rows.len());
+    println!(
+        "{} {}",
+        ui::bold(&rows.len().to_string()),
+        ui::dim("users total")
+    );
     Ok(ExitCode::SUCCESS)
 }
 
 async fn admin_workspaces(database_url: Option<String>, limit: i64) -> Result<ExitCode> {
+    use wlog_cli::ui;
+
     let url = resolve_admin_db_url(database_url)?;
     let pool = connect(&StorageConfig {
         url,
@@ -614,23 +851,26 @@ async fn admin_workspaces(database_url: Option<String>, limit: i64) -> Result<Ex
     let workspaces = WorkspaceRepo::new(pool);
 
     let rows = workspaces.list(limit).await?;
-    println!("{:<24}  {:<36}  {:<20}", "SLUG", "NAME", "CREATED");
-    println!("{}", "-".repeat(82));
+    ui::banner_heading("workspaces");
+
+    let mut table = ui::table(&["SLUG", "NAME", "CREATED"]);
     for w in &rows {
         let created = w.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
-        println!(
-            "{slug:<24}  {name:<36}  {created:<20}",
-            slug = w.slug,
-            name = w.name
-        );
+        table.add_row(vec![w.slug.clone(), w.name.clone(), created]);
     }
+    println!("{table}");
     println!();
-    println!("{} workspaces total", rows.len());
+    println!(
+        "{} {}",
+        ui::bold(&rows.len().to_string()),
+        ui::dim("workspaces total")
+    );
     Ok(ExitCode::SUCCESS)
 }
 
 async fn admin_tail(nats_url: String, subject: String, max_body: usize) -> Result<ExitCode> {
     use futures::StreamExt;
+    use wlog_cli::ui;
 
     let client = async_nats::connect(&nats_url)
         .await
@@ -639,31 +879,44 @@ async fn admin_tail(nats_url: String, subject: String, max_body: usize) -> Resul
         .subscribe(subject.clone())
         .await
         .with_context(|| format!("subscribing to {subject}"))?;
-    eprintln!("tailing {subject} on {nats_url} (Ctrl-C to exit)");
-    eprintln!();
+
+    ui::banner_heading("admin tail");
+    ui::kv("subject", &subject);
+    ui::kv("nats", &nats_url);
+    ui::kv("max-body", max_body);
+    println!();
+    println!("{}", ui::dim("Ctrl-C to exit"));
+    ui::divider();
 
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
+    let mut count: u64 = 0;
 
     loop {
         tokio::select! {
             biased;
             _ = &mut ctrl_c => {
-                eprintln!();
-                eprintln!("interrupted");
+                println!();
+                ui::warning(format!("interrupted after {count} message(s)"));
                 break;
             }
             msg = sub.next() => {
                 let Some(msg) = msg else { break };
+                count += 1;
                 let ts = chrono::Utc::now().format("%H:%M:%S%.3f");
                 let body_len = msg.payload.len();
                 let body_str = String::from_utf8_lossy(&msg.payload);
                 let trimmed: String = if body_str.len() > max_body {
-                    format!("{}... ({body_len}B)", &body_str[..max_body])
+                    format!("{}{}", &body_str[..max_body], ui::dim(&format!("…({body_len}B)")))
                 } else {
                     body_str.into_owned()
                 };
-                println!("{ts}  {subject}  {trimmed}", subject = msg.subject);
+                println!(
+                    "{ts_col}  {subj}  {body}",
+                    ts_col = ui::dim(&ts.to_string()),
+                    subj = ui::info(msg.subject.as_ref()),
+                    body = trimmed
+                );
             }
         }
     }
@@ -1416,11 +1669,21 @@ async fn init(
         }
         Err(e) => return Err(e.into()),
     };
-    println!(
-        "workspace {} ready ({})",
-        cfg.workspace.slug, workspace.id.0
-    );
-    println!("config written to {}", written.display());
+    {
+        use wlog_cli::ui;
+        ui::section("workspace ready");
+        ui::kv("slug", &cfg.workspace.slug);
+        ui::kv("id", workspace.id.0);
+        ui::kv("user", &cfg.workspace.user_handle);
+        ui::kv("config", written.display());
+        println!();
+        ui::success("workspace bootstrapped");
+        println!();
+        println!("{}", ui::dim("Next steps:"));
+        println!("  {} wlog hooks install", ui::info("→"));
+        println!("  {} wlog daemon run", ui::info("→"));
+        println!("  {} wlog status", ui::info("→"));
+    }
     Ok(ExitCode::SUCCESS)
 }
 

@@ -24,6 +24,7 @@ wlog-ingest-cc.workspace = true
 wlog-ingest-gh.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
+comfy-table.workspace = true
 tokio.workspace = true
 async-nats.workspace = true
 async-trait.workspace = true
