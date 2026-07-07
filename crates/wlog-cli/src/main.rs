@@ -356,6 +356,18 @@ enum AdminAction {
         #[arg(long, env = "WLOG_COST_REPORTS_DIR")]
         reports_dir: Option<PathBuf>,
     },
+    /// Create a workspace + user per GitHub org member from stdin JSON.
+    ///
+    /// Pipe the GitHub members API through it:
+    ///   gh api /orgs/wienerlabs/members --paginate | wlog admin sync-members
+    SyncMembers {
+        /// Database URL.
+        #[arg(long, env = "WLOG_ADMIN_DATABASE_URL")]
+        database_url: Option<String>,
+        /// Report what would change without writing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -919,7 +931,136 @@ async fn admin_cmd(action: AdminAction) -> Result<ExitCode> {
             dry_run,
         } => admin_replay(database_url, nats_url, workspace, limit, dry_run).await,
         AdminAction::Cost { days, reports_dir } => Ok(admin_cost(days, reports_dir)),
+        AdminAction::SyncMembers {
+            database_url,
+            dry_run,
+        } => admin_sync_members(database_url, dry_run).await,
     }
+}
+
+fn github_login_to_slug(login: &str) -> String {
+    let mut slug: String = login
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_lowercase() || c.is_ascii_digit() {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    while slug.contains("--") {
+        slug = slug.replace("--", "-");
+    }
+    let slug = slug.trim_matches('-').to_string();
+    if slug.len() < 2 {
+        format!("gh-{slug}")
+    } else {
+        slug
+    }
+}
+
+async fn admin_sync_members(database_url: Option<String>, dry_run: bool) -> Result<ExitCode> {
+    use std::io::Read as _;
+
+    use wlog_cli::ui;
+
+    let mut raw = String::new();
+    std::io::stdin()
+        .lock()
+        .read_to_string(&mut raw)
+        .context("reading members JSON from stdin")?;
+
+    #[derive(serde::Deserialize)]
+    struct MemberRow {
+        login: String,
+    }
+    let members: Vec<MemberRow> =
+        serde_json::from_str(&raw).context("stdin is not a GitHub members JSON array")?;
+
+    ui::banner_heading("admin sync-members");
+    ui::kv("members", members.len());
+    ui::kv("mode", if dry_run { "dry-run" } else { "live" });
+    println!();
+
+    let url = resolve_admin_db_url(database_url)?;
+    let pool = connect(&StorageConfig {
+        url,
+        max_connections: 4,
+    })
+    .await?;
+    let workspaces = WorkspaceRepo::new(pool.clone());
+    let users = UserRepo::new(pool);
+
+    let mut table = ui::table(&["LOGIN", "SLUG", "WORKSPACE", "USER"]);
+    let mut created_ws = 0u32;
+    let mut created_users = 0u32;
+
+    for m in &members {
+        let slug = github_login_to_slug(&m.login);
+        let (ws, ws_state) = match workspaces.get_by_slug(&slug).await {
+            Ok(w) => (Some(w), "existing"),
+            Err(StorageError::NotFound) => {
+                if dry_run {
+                    (None, "would create")
+                } else {
+                    let w = workspaces
+                        .create(NewWorkspace {
+                            slug: slug.clone(),
+                            name: m.login.clone(),
+                        })
+                        .await
+                        .with_context(|| format!("creating workspace {slug}"))?;
+                    created_ws += 1;
+                    (Some(w), "created")
+                }
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        let user_state = if let Some(ref w) = ws {
+            match users.get_by_handle(w.id, &m.login).await {
+                Ok(_) => "existing",
+                Err(StorageError::NotFound) => {
+                    if dry_run {
+                        "would create"
+                    } else {
+                        users
+                            .create(NewUser {
+                                workspace_id: w.id,
+                                handle: m.login.clone(),
+                                email: None,
+                            })
+                            .await
+                            .with_context(|| format!("creating user {}", m.login))?;
+                        created_users += 1;
+                        "created"
+                    }
+                }
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            "would create"
+        };
+
+        table.add_row(vec![
+            m.login.clone(),
+            slug,
+            ws_state.to_string(),
+            user_state.to_string(),
+        ]);
+    }
+    println!("{table}");
+    println!();
+    if dry_run {
+        ui::warning("dry-run; nothing was written");
+    } else {
+        ui::success(format!(
+            "synced: {created_ws} workspace(s) + {created_users} user(s) created"
+        ));
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn admin_cost(days: u32, reports_dir: Option<PathBuf>) -> ExitCode {

@@ -1,9 +1,11 @@
 //! GitHub event types we accept on the webhook route.
 //!
-//! The set is the mandate-fixed list: `pull_request`,
+//! The core set is the mandate-fixed list: `pull_request`,
 //! `pull_request_review`, `issues`, `issue_comment`, `workflow_run`,
-//! `push`. Anything else returns HTTP 202 without publishing so GitHub
-//! does not retry; tracking the discarded kind in logs is enough.
+//! `push`. Org integration adds the lifecycle kinds: `member`,
+//! `organization`, `repository`, `release`. Anything else returns
+//! HTTP 202 without publishing so GitHub does not retry; tracking the
+//! discarded kind in logs is enough.
 
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +29,14 @@ pub enum GhEventKind {
     WorkflowRun,
     /// `push`
     Push,
+    /// `member` (collaborator added / removed / permission edited)
+    Member,
+    /// `organization` (member_added, member_removed, member_invited)
+    Organization,
+    /// `repository` (created, deleted, archived, renamed, ...)
+    Repository,
+    /// `release` (published, edited, ...)
+    Release,
 }
 
 impl GhEventKind {
@@ -39,6 +49,10 @@ impl GhEventKind {
             "issue_comment" => Self::IssueComment,
             "workflow_run" => Self::WorkflowRun,
             "push" => Self::Push,
+            "member" => Self::Member,
+            "organization" => Self::Organization,
+            "repository" => Self::Repository,
+            "release" => Self::Release,
             _ => return None,
         })
     }
@@ -52,6 +66,10 @@ impl GhEventKind {
             Self::IssueComment => "issue_comment",
             Self::WorkflowRun => "workflow",
             Self::Push => "push",
+            Self::Member => "member",
+            Self::Organization => "org",
+            Self::Repository => "repo",
+            Self::Release => "release",
         }
     }
 }
@@ -85,6 +103,22 @@ impl GhEvent {
             (kind, Some(action)) => format!("{}.{action}", kind.wire()),
         }
     }
+
+    /// True when the delivery was produced by Dependabot. The engine
+    /// uses this to route dependency-bump PRs into the automated-PR
+    /// lane instead of the human task synthesis lane.
+    pub fn is_dependabot(&self) -> bool {
+        matches!(
+            self.sender.as_deref(),
+            Some("dependabot[bot]") | Some("dependabot-preview[bot]")
+        )
+    }
+
+    /// True when the delivery was produced by any `[bot]` account
+    /// (Dependabot, GitHub Actions, Renovate, ...).
+    pub fn is_bot(&self) -> bool {
+        self.sender.as_deref().is_some_and(|s| s.ends_with("[bot]"))
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +136,62 @@ mod tests {
             GhEventKind::parse("workflow_run"),
             Some(GhEventKind::WorkflowRun)
         );
+        assert_eq!(GhEventKind::parse("member"), Some(GhEventKind::Member));
+        assert_eq!(
+            GhEventKind::parse("organization"),
+            Some(GhEventKind::Organization)
+        );
+        assert_eq!(
+            GhEventKind::parse("repository"),
+            Some(GhEventKind::Repository)
+        );
+        assert_eq!(GhEventKind::parse("release"), Some(GhEventKind::Release));
         assert_eq!(GhEventKind::parse("ping"), None);
+    }
+
+    #[test]
+    fn org_lifecycle_subject_suffixes() {
+        let event = GhEvent {
+            kind: GhEventKind::Organization,
+            action: Some("member_added".to_string()),
+            repository: None,
+            sender: None,
+            delivery_id: "1".into(),
+            body: serde_json::json!({}),
+        };
+        assert_eq!(event.subject_suffix(), "org.member_added");
+
+        let event = GhEvent {
+            kind: GhEventKind::Repository,
+            action: Some("created".to_string()),
+            repository: Some("wienerlabs/new-repo".into()),
+            sender: None,
+            delivery_id: "2".into(),
+            body: serde_json::json!({}),
+        };
+        assert_eq!(event.subject_suffix(), "repo.created");
+    }
+
+    #[test]
+    fn dependabot_detection() {
+        let mut event = GhEvent {
+            kind: GhEventKind::PullRequest,
+            action: Some("opened".to_string()),
+            repository: Some("wienerlabs/wienerlog".into()),
+            sender: Some("dependabot[bot]".into()),
+            delivery_id: "3".into(),
+            body: serde_json::json!({}),
+        };
+        assert!(event.is_dependabot());
+        assert!(event.is_bot());
+
+        event.sender = Some("kh0ra".into());
+        assert!(!event.is_dependabot());
+        assert!(!event.is_bot());
+
+        event.sender = Some("github-actions[bot]".into());
+        assert!(!event.is_dependabot());
+        assert!(event.is_bot());
     }
 
     #[test]
