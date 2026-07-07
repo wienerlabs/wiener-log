@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.wienerlabs.wlog-web</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/wlog-web</string>
+        <string>--listen</string>
+        <string>127.0.0.1:8088</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>WLOG_DATABASE_URL_FILE</key>
+        <string>/Users/Shared/wlog/secrets/database_url</string>
+        <key>RUST_LOG</key>
+        <string>info</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/Shared/wlog/logs/web.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/Shared/wlog/logs/web.err.log</string>
+</dict>
+</plist>

@@ -712,7 +712,7 @@ async fn status_cmd(
                     url: loaded.config.storage.url.clone(),
                     max_connections: 1,
                 };
-                let url = cfg.url.clone();
+                let url = ui::redact_url(&cfg.url);
                 match connect(&cfg).await {
                     Ok(pool) => match healthcheck(&pool).await {
                         Ok(()) => ui::line(ui::Status::Ok, "Postgres", &url),
@@ -2210,6 +2210,20 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
                     p
                 }
             });
+            // launchd plists are world-readable, so secrets arrive via a
+            // file path indirection instead of a literal env value.
+            let gh_secret = match gh_secret {
+                Some(s) => Some(s),
+                None => match std::env::var("WLOG_GH_SECRET_FILE") {
+                    Ok(path) => Some(
+                        std::fs::read_to_string(&path)
+                            .with_context(|| format!("reading WLOG_GH_SECRET_FILE {path}"))?
+                            .trim()
+                            .to_string(),
+                    ),
+                    Err(_) => None,
+                },
+            };
             let config = daemon::DaemonConfig {
                 socket: socket.clone(),
                 nats_url,

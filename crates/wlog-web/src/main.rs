@@ -28,8 +28,15 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
     let args = Args::parse();
+    let database_url = match std::env::var("WLOG_DATABASE_URL_FILE") {
+        Ok(path) => std::fs::read_to_string(&path)
+            .map_err(|e| anyhow::anyhow!("reading WLOG_DATABASE_URL_FILE {path}: {e}"))?
+            .trim()
+            .to_string(),
+        Err(_) => args.database_url,
+    };
     let pool = connect(&StorageConfig {
-        url: args.database_url,
+        url: database_url,
         max_connections: 8,
     })
     .await?;
