@@ -50,8 +50,12 @@ local `~/.config/wlog/wlog.toml`).
 ### Service `ingest` (GitHub webhook receiver)
 
 - Start command:
-  `wlog daemon run --socket /tmp/wlog.sock --gh-listen 0.0.0.0:${PORT}`
-  (this is also the repo default via `railway.json`)
+  `wlog daemon run --socket /tmp/wlog.sock --gh-listen 0.0.0.0:8080`
+  (this is also the repo default via `railway.json`). Port is
+  hardcoded to 8080 on purpose: the container ENTRYPOINT is tini, so
+  the start command runs without a shell and `${PORT}` would NOT
+  expand (it binds the literal string and the GH listener dies). Set
+  the domain target port to 8080 to match.
 - Env:
 
   | Var | Value |
@@ -87,7 +91,9 @@ local `~/.config/wlog/wlog.toml`).
 
 ### Service `web` (dashboard + JSON API)
 
-- Start command: `wlog-web --listen 0.0.0.0:${PORT}`
+- Start command: `wlog-web --listen 0.0.0.0:8080`
+  (hardcode 8080 for the same no-shell reason as ingest; set the
+  domain target port to 8080)
 - Env:
 
   | Var | Value |
