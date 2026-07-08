@@ -5,10 +5,11 @@ members, repositories, PRs, issues, workflow runs, and Dependabot.
 
 ## The event map
 
-Every accepted `X-GitHub-Event` header maps to a NATS subject leaf
+Every accepted `X-GitHub-Event` header maps to a subject leaf
 (ADR-0007). The receiver is `wlog-ingest-gh`, exposed by the daemon
-at `--gh-listen` and fronted by Caddy at
-`https://wlog.wienerlabs.io/github-webhook`.
+at `--gh-listen`. In the live VPS-less deployment it runs as the
+Railway `ingest` service and the webhook path is `/webhook`
+(see [deploy-railway.md](./deploy-railway.md)).
 
 | GitHub event | Subject leaf | Captures |
 | --- | --- | --- |
@@ -121,11 +122,11 @@ Dependabot PRs then flow back into WienerLog through the
 | --- | --- |
 | Webhook receiver code (10 event kinds) | shipped |
 | HMAC verify + replay LRU + two-key rotation | shipped |
-| `wlog admin sync-members` | shipped |
-| Webhook installer script | shipped (dry-run verified over 30 repos) |
+| `wlog admin sync-members` | shipped; 11 members mirrored to Neon 2026-07-08 |
+| Webhook installer script | shipped; per-repo hooks live on 26 active repos 2026-07-08 |
 | Dependabot rollout script | shipped (verified: 28/28 active repos covered) |
-| Org member sync (live run) | local DB synced; prod pending Hetzner |
-| Org webhook (live) | pending Hetzner endpoint + `admin:org_hook` scope |
+| Org webhook (live) | **LIVE**: Railway `ingest` at `https://ingest-production-90fc.up.railway.app/webhook`, e2e verified (`issue.opened` landed in Neon) |
+| Org-level single hook (`--org-hook`) | optional; needs `admin:org_hook` scope; per-repo hooks used instead |
 | Engine auto-workspace on `org.member_added` | Phase 5 backlog |
 
 ### Token scopes

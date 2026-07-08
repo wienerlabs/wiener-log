@@ -67,7 +67,7 @@ local `~/.config/wlog/wlog.toml`).
 
 - Settings, Networking, **Generate Domain**. Note it:
   `https://<ingest>.up.railway.app`. Your GitHub webhook URL is
-  `https://<ingest>.up.railway.app/github-webhook`.
+  `https://<ingest>.up.railway.app/webhook`.
 
 ### Service `engine` (synthesis loop)
 
@@ -110,7 +110,7 @@ local `~/.config/wlog/wlog.toml`).
 With the ingest domain live:
 
 ```bash
-export WLOG_WEBHOOK_URL="https://<ingest>.up.railway.app/github-webhook"
+export WLOG_WEBHOOK_URL="https://<ingest>.up.railway.app/webhook"
 WLOG_GH_WEBHOOK_SECRET='<same hex as WLOG_GH_SECRET>' \
   ./scripts/github-org-integrate.sh --active-days 60
 

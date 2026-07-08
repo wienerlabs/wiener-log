@@ -13,7 +13,7 @@
 #   ./scripts/github-org-integrate.sh --org-hook
 #
 # Env:
-#   WLOG_WEBHOOK_URL     (default https://wlog.wienerlabs.io/github-webhook)
+#   WLOG_WEBHOOK_URL     (default https://wlog.wienerlabs.io/webhook)
 #   WLOG_GH_WEBHOOK_SECRET or WLOG_GH_WEBHOOK_SECRET_FILE (required for apply)
 #   WLOG_GH_ORG          (default wienerlabs)
 #
@@ -24,8 +24,11 @@
 set -euo pipefail
 
 ORG="${WLOG_GH_ORG:-wienerlabs}"
-URL="${WLOG_WEBHOOK_URL:-https://wlog.wienerlabs.io/github-webhook}"
-EVENTS='["push","pull_request","pull_request_review","issues","issue_comment","workflow_run","member","organization","repository","release"]'
+URL="${WLOG_WEBHOOK_URL:-https://wlog.wienerlabs.io/webhook}"
+# Per-repo hooks: `organization` is an org-only event and 422s at the
+# repo level, so it is excluded here and added back for --org-hook.
+EVENTS_REPO='["push","pull_request","pull_request_review","issues","issue_comment","workflow_run","member","repository","release"]'
+EVENTS_ORG='["push","pull_request","pull_request_review","issues","issue_comment","workflow_run","member","organization","repository","release"]'
 
 dry_run=0
 org_hook=0
@@ -66,7 +69,7 @@ hook_config() {
 if [[ "$org_hook" == "1" ]]; then
     bold "==> Installing ONE org-level hook on $ORG -> $URL"
     if [[ "$dry_run" == "1" ]]; then
-        echo "DRY RUN: would POST /orgs/$ORG/hooks (events: $EVENTS)"
+        echo "DRY RUN: would POST /orgs/$ORG/hooks (events: $EVENTS_ORG)"
         exit 0
     fi
     existing="$(gh api "/orgs/$ORG/hooks" --jq \
@@ -82,7 +85,7 @@ if [[ "$org_hook" == "1" ]]; then
         -f name=web \
         -F active=true \
         --input <(printf '{"name":"web","active":true,"events":%s,"config":%s}' \
-                  "$EVENTS" "$(hook_config)")
+                  "$EVENTS_ORG" "$(hook_config)")
     bold "==> Org hook installed"
     exit 0
 fi
@@ -95,11 +98,11 @@ if [[ -n "$explicit_repos" ]]; then
 elif [[ "$active_days" -gt 0 ]]; then
     cutoff="$(date -u -v-"${active_days}"d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
               || date -u -d "-${active_days} days" +%Y-%m-%dT%H:%M:%SZ)"
-    bold "==> Selecting repos pushed since $cutoff"
+    bold "==> Selecting repos pushed since $cutoff (archived excluded)"
     while IFS= read -r name; do
         repos+=("$name")
-    done < <(gh repo list "$ORG" --limit 200 --json name,pushedAt \
-             --jq ".[] | select(.pushedAt > \"$cutoff\") | .name")
+    done < <(gh repo list "$ORG" --limit 200 --json name,pushedAt,isArchived \
+             --jq ".[] | select(.pushedAt > \"$cutoff\" and (.isArchived | not)) | .name")
 else
     die "pass --repos \"a b c\" or --active-days N (or --org-hook)"
 fi
@@ -113,6 +116,7 @@ printf '    %s\n' "${repos[@]}"
 
 installed=0
 skipped=0
+failed=0
 for repo in "${repos[@]}"; do
     existing="$(gh api "/repos/$ORG/$repo/hooks" --jq \
         "[.[] | select(.config.url == \"$URL\")] | length" 2>/dev/null || echo 0)"
@@ -126,14 +130,24 @@ for repo in "${repos[@]}"; do
         installed=$((installed+1))
         continue
     fi
-    printf '{"name":"web","active":true,"events":%s,"config":%s}' \
-        "$EVENTS" "$(hook_config)" \
-        | gh api -X POST "/repos/$ORG/$repo/hooks" --input - > /dev/null
-    echo "  + $repo (installed)"
-    installed=$((installed+1))
+    # One repo's failure (archived, missing scope, permissions) must not
+    # abort the whole rollout; log it and move on.
+    if printf '{"name":"web","active":true,"events":%s,"config":%s}' \
+        "$EVENTS_REPO" "$(hook_config)" \
+        | gh api -X POST "/repos/$ORG/$repo/hooks" --input - > /dev/null 2>/tmp/wlog-hook-err; then
+        echo "  + $repo (installed)"
+        installed=$((installed+1))
+    else
+        warn "  x $repo ($(tr -d '\n' < /tmp/wlog-hook-err | sed 's/^gh: //'))"
+        failed=$((failed+1))
+    fi
 done
 
-bold "==> Done: $installed installed/planned, $skipped already present"
+bold "==> Done: $installed installed/planned, $skipped already present, $failed failed"
 if [[ "$dry_run" == "1" ]]; then
     warn "dry-run: nothing was written; re-run without --dry-run to apply"
+fi
+if [[ "$failed" -gt 0 ]]; then
+    warn "some repos failed; if the error mentions admin:repo_hook run:"
+    warn "  gh auth refresh -h github.com -s admin:repo_hook"
 fi
