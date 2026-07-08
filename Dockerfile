@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /work/target/release/wlog /usr/local/bin/wlog
 COPY --from=builder /work/target/release/wlog-web /usr/local/bin/wlog-web
+COPY infra/railway/entrypoint.sh /usr/local/bin/wlog-entrypoint
+RUN chmod +x /usr/local/bin/wlog-entrypoint
 WORKDIR /opt/wlog
 ENV PATH=/usr/local/bin:$PATH
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["wlog", "about"]
+CMD ["/usr/local/bin/wlog-entrypoint"]

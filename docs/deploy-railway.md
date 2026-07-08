@@ -43,39 +43,44 @@ local `~/.config/wlog/wlog.toml`).
 
 1. railway.com, New Project, Deploy from GitHub repo,
    `wienerlabs/wienerlog`.
-2. Create **three services** from the same repo. Each service picks
-   up the root `Dockerfile` automatically; only the start command
-   and env vars differ.
+2. Create **three services** from the same repo. Each service builds
+   the root `Dockerfile` and runs the same `wlog-entrypoint`
+   dispatcher; they differ only by the `WLOG_ROLE` variable, so no
+   custom start command is ever needed. This is what lets the whole
+   stack be provisioned with `railway add --variables` from the CLI.
+
+`WLOG_ROLE` picks the process: `ingest` (default) runs the webhook
+receiver, `engine` runs the synthesis loop, `web` runs the
+dashboard. The dispatcher runs under `/bin/sh`, so `$PORT` expands
+correctly (Railway's injected port, 8080 fallback).
 
 ### Service `ingest` (GitHub webhook receiver)
 
-- Start command:
-  `wlog daemon run --socket /tmp/wlog.sock --gh-listen 0.0.0.0:8080`
-  (this is also the repo default via `railway.json`). Port is
-  hardcoded to 8080 on purpose: the container ENTRYPOINT is tini, so
-  the start command runs without a shell and `${PORT}` would NOT
-  expand (it binds the literal string and the GH listener dies). Set
-  the domain target port to 8080 to match.
+- Start command: none (image default = dispatcher, role defaults to
+  `ingest`).
 - Env:
 
   | Var | Value |
   | --- | --- |
+  | `WLOG_ROLE` | `ingest` (optional; it is the default) |
   | `WLOG_DAEMON_DATABASE_URL` | Neon direct URL |
   | `WLOG_DAEMON_WORKSPACE` | `wienerlabs` (org-wide events workspace) |
   | `WLOG_GH_SECRET` | webhook HMAC secret (`openssl rand -hex 32`) |
+  | `PORT` | `8080` |
   | `RUST_LOG` | `info` |
 
-- Settings, Networking, **Generate Domain**. Note it:
-  `https://<ingest>.up.railway.app`. Your GitHub webhook URL is
+- Settings, Networking, **Generate Domain** (target port 8080). Note
+  it: `https://<ingest>.up.railway.app`. Your GitHub webhook URL is
   `https://<ingest>.up.railway.app/webhook`.
 
 ### Service `engine` (synthesis loop)
 
-- Start command: `wlog engine run --interval 60 --batch-min 3`
+- Start command: none (dispatcher, role `engine`).
 - Env:
 
   | Var | Value |
   | --- | --- |
+  | `WLOG_ROLE` | `engine` |
   | `WLOG_DATABASE_URL` | Neon direct URL |
   | `ANTHROPIC_API_KEY` | founder key |
   | `WLOG_SYNTH_MODEL` | `claude-sonnet-4-6` (default) |
@@ -91,19 +96,40 @@ local `~/.config/wlog/wlog.toml`).
 
 ### Service `web` (dashboard + JSON API)
 
-- Start command: `wlog-web --listen 0.0.0.0:8080`
-  (hardcode 8080 for the same no-shell reason as ingest; set the
-  domain target port to 8080)
+- Start command: none (dispatcher, role `web`).
 - Env:
 
   | Var | Value |
   | --- | --- |
+  | `WLOG_ROLE` | `web` |
   | `WLOG_DATABASE_URL` | Neon direct URL |
+  | `PORT` | `8080` |
   | `RUST_LOG` | `info` |
 
-- Generate Domain: `https://<web>.up.railway.app` is your dashboard
-  (`/` HTML, `/health` JSON). Map `wlog.wienerlabs.io` as a custom
-  domain later if wanted.
+- Generate Domain (target port 8080): `https://<web>.up.railway.app`
+  is your dashboard (`/` HTML, `/health` JSON). Map
+  `wlog.wienerlabs.io` as a custom domain later if wanted.
+
+### Or: provision engine + web from the CLI
+
+Once `railway login` is done and the project is linked
+(`railway link`), the two extra services are two commands:
+
+```bash
+railway add --service engine --repo wienerlabs/wienerlog \
+  --variables "WLOG_ROLE=engine" \
+  --variables "WLOG_DATABASE_URL=<neon>" \
+  --variables "WLOG_ENGINE_CURSOR=/tmp/engine-cursor" \
+  --variables "RUST_LOG=info"
+
+railway add --service web --repo wienerlabs/wienerlog \
+  --variables "WLOG_ROLE=web" \
+  --variables "PORT=8080" \
+  --variables "WLOG_DATABASE_URL=<neon>" \
+  --variables "RUST_LOG=info"
+
+railway domain --service web   # generate the dashboard domain
+```
 
 ## 3. GitHub webhooks
 
