@@ -82,6 +82,50 @@ impl EventRepo {
         Ok(rows.into_iter().map(|(u,)| u).collect())
     }
 
+    /// Events ingested after `cursor`, oldest first, with each row's
+    /// `ingested_at` so the caller can advance its cursor. Drives the
+    /// `wlog engine run` poll loop.
+    pub async fn list_since_ingested(
+        &self,
+        cursor: DateTime<Utc>,
+        limit: i64,
+    ) -> Result<Vec<(Event, DateTime<Utc>)>, StorageError> {
+        let rows = sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                Uuid,
+                String,
+                String,
+                JsonValue,
+                DateTime<Utc>,
+                DateTime<Utc>,
+            ),
+        >(
+            "SELECT id, workspace_id, source, kind, payload, occurred_at, ingested_at \
+             FROM events WHERE ingested_at > $1 ORDER BY ingested_at ASC LIMIT $2",
+        )
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            out.push((
+                Event {
+                    id: row.0,
+                    workspace_id: WorkspaceId(row.1),
+                    source: parse_event_source(&row.2)?,
+                    kind: EventKind::new(row.3),
+                    payload: row.4,
+                    occurred_at: row.5,
+                },
+                row.6,
+            ));
+        }
+        Ok(out)
+    }
+
     /// Recent events, newest first. Optional workspace filter.
     /// Used by `wlog log` and `wlog admin replay`.
     pub async fn list_recent(

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "wlog daemon run --socket /tmp/wlog.sock --gh-listen 0.0.0.0:${PORT}",
+    "restartPolicyType": "ALWAYS",
+    "healthcheckPath": null
+  }
+}

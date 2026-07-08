@@ -53,6 +53,7 @@ async fn daemon_cc_worker_publishes_session_events() -> Result<()> {
         .await?;
 
     let config = DaemonConfig {
+        database_url: None,
         socket: socket.clone(),
         nats_url: Some(nats_url.clone()),
         cc_projects_dir: Some(projects.clone()),

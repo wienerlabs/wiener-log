@@ -33,6 +33,10 @@ pub const CC_POLL_INTERVAL: Duration = Duration::from_secs(5);
 pub struct DaemonConfig {
     /// Path to bind the Unix socket at.
     pub socket: PathBuf,
+    /// Optional Postgres URL. When set, events are written straight
+    /// into the `events` table (VPS-less mode; see
+    /// docs/deploy-railway.md) and NATS is not contacted.
+    pub database_url: Option<String>,
     /// Optional NATS URL; `None` skips publishing and feeds payloads
     /// into [`LoggingSink`] instead.
     pub nats_url: Option<String>,
@@ -67,9 +71,12 @@ pub async fn run(config: DaemonConfig, shutdown: Arc<Notify>) -> Result<DaemonSt
     let listener = bind_listener(&config.socket)?;
     tracing::info!(socket = %config.socket.display(), "wlog daemon listening");
 
-    let sink: Arc<dyn PayloadSink> = match config.nats_url {
-        Some(ref url) => Arc::new(NatsSink::connect(url).await?),
-        None => Arc::new(LoggingSink::default()),
+    let sink: Arc<dyn PayloadSink> = if let Some(ref db_url) = config.database_url {
+        Arc::new(PgSink::connect(db_url).await?)
+    } else if let Some(ref url) = config.nats_url {
+        Arc::new(NatsSink::connect(url).await?)
+    } else {
+        Arc::new(LoggingSink::default())
     };
 
     let socket_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -426,6 +433,114 @@ impl PayloadSink for NatsSink {
         let subject = format!("wlog.{}.event.gh.{subject_suffix}", self.workspace);
         let body = serde_json::to_vec(&event)?;
         self.publish(subject, body).await
+    }
+}
+
+/// Direct-to-Postgres sink: the VPS-less path. Events land in the
+/// `events` table on the shared database (e.g. Neon) with no NATS in
+/// between. The engine loop (`wlog engine run`) polls the same table.
+pub struct PgSink {
+    events: wlog_storage::EventRepo,
+    workspace_id: wlog_proto::WorkspaceId,
+}
+
+impl std::fmt::Debug for PgSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PgSink")
+            .field("workspace_id", &self.workspace_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PgSink {
+    /// Connect to Postgres and resolve (or create) the workspace named
+    /// by `WLOG_DAEMON_WORKSPACE` (default `local`).
+    pub async fn connect(database_url: &str) -> Result<Self> {
+        let pool = wlog_storage::connect(&wlog_storage::StorageConfig {
+            url: database_url.to_string(),
+            max_connections: 4,
+        })
+        .await
+        .context("connecting to Postgres for PgSink")?;
+        let slug = std::env::var("WLOG_DAEMON_WORKSPACE").unwrap_or_else(|_| "local".to_string());
+        let workspaces = wlog_storage::WorkspaceRepo::new(pool.clone());
+        let workspace = match workspaces.get_by_slug(&slug).await {
+            Ok(w) => w,
+            Err(wlog_storage::StorageError::NotFound) => workspaces
+                .create(wlog_storage::NewWorkspace {
+                    slug: slug.clone(),
+                    name: slug.clone(),
+                })
+                .await
+                .with_context(|| format!("creating workspace {slug}"))?,
+            Err(e) => return Err(e.into()),
+        };
+        tracing::info!(workspace = %slug, "pg sink ready");
+        Ok(Self {
+            events: wlog_storage::EventRepo::new(pool),
+            workspace_id: workspace.id,
+        })
+    }
+
+    async fn persist(
+        &self,
+        source: wlog_proto::EventSource,
+        kind: &str,
+        payload: serde_json::Value,
+        occurred_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let event = wlog_proto::Event {
+            id: uuid::Uuid::new_v4(),
+            workspace_id: self.workspace_id,
+            source,
+            kind: wlog_proto::EventKind::new(kind.to_string()),
+            payload,
+            occurred_at,
+        };
+        self.events.create(&event).await?;
+        tracing::debug!(kind, "event persisted");
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl PayloadSink for PgSink {
+    async fn accept(&self, payload: HookPayload) -> Result<()> {
+        let occurred = payload.emitted_at;
+        let kind = payload.kind.clone();
+        let body = serde_json::to_value(&payload)?;
+        self.persist(wlog_proto::EventSource::Git, &kind, body, occurred)
+            .await
+    }
+
+    async fn accept_cc(&self, payload: HookPayload, extras: serde_json::Value) -> Result<()> {
+        let kind = payload
+            .kind
+            .strip_prefix("cc.")
+            .unwrap_or(&payload.kind)
+            .to_string();
+        self.persist(
+            wlog_proto::EventSource::ClaudeCode,
+            &kind,
+            extras,
+            payload.emitted_at,
+        )
+        .await
+    }
+
+    async fn accept_gh(
+        &self,
+        subject_suffix: String,
+        event: wlog_ingest_gh::GhEvent,
+    ) -> Result<()> {
+        let body = serde_json::to_value(&event)?;
+        self.persist(
+            wlog_proto::EventSource::GitHub,
+            &subject_suffix,
+            body,
+            chrono::Utc::now(),
+        )
+        .await
     }
 }
 

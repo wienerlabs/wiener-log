@@ -44,6 +44,7 @@ async fn daemon_publishes_hook_payloads_to_nats() -> Result<()> {
     let tmp = tempdir::TempDir::new("wlog-daemon-e2e")?;
     let socket = tmp.path().join("wlog.sock");
     let config = DaemonConfig {
+        database_url: None,
         socket: socket.clone(),
         nats_url: Some(nats_url.clone()),
         cc_projects_dir: None,

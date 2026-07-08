@@ -60,6 +60,7 @@ async fn daemon_gh_worker_publishes_pr_event() -> Result<()> {
         .await?;
 
     let config = DaemonConfig {
+        database_url: None,
         socket: socket.clone(),
         nats_url: Some(nats_url.clone()),
         cc_projects_dir: None,

@@ -64,10 +64,11 @@ struct Cli {
     #[arg(long, global = true, env = "WLOG_CONFIG")]
     config: Option<PathBuf>,
     /// Suppress informational output (errors still print).
-    #[arg(long, short = 'q', global = true, env = "WLOG_QUIET")]
+    #[arg(long, short = 'q', global = true)]
     quiet: bool,
-    /// Disable ANSI color regardless of TTY detection.
-    #[arg(long, global = true, env = "NO_COLOR")]
+    /// Disable ANSI color regardless of TTY detection
+    /// (setting `NO_COLOR` in the environment does the same).
+    #[arg(long, global = true)]
     no_color: bool,
     #[command(subcommand)]
     command: Command,
@@ -205,6 +206,11 @@ enum Command {
     Daemon {
         #[command(subcommand)]
         action: DaemonAction,
+    },
+    /// Run the synthesis engine loop (polls Postgres, no NATS needed).
+    Engine {
+        #[command(subcommand)]
+        action: EngineAction,
     },
     /// Inspect LLM spend recorded in the cost ledger.
     Cost {
@@ -371,12 +377,41 @@ enum AdminAction {
 }
 
 #[derive(Debug, Subcommand)]
+enum EngineAction {
+    /// Poll the events table and synthesize proposed tasks per batch.
+    Run {
+        /// Postgres URL (or WLOG_DATABASE_URL_FILE indirection).
+        #[arg(long, env = "WLOG_DATABASE_URL")]
+        database_url: Option<String>,
+        /// Poll interval in seconds.
+        #[arg(long, default_value_t = 60)]
+        interval: u64,
+        /// Synthesize only when a workspace has at least this many new events.
+        #[arg(long, default_value_t = 3)]
+        batch_min: usize,
+        /// Anthropic model for synthesis.
+        #[arg(long, env = "WLOG_SYNTH_MODEL", default_value = "claude-sonnet-4-6")]
+        model: String,
+        /// Cursor state file.
+        #[arg(long, env = "WLOG_ENGINE_CURSOR")]
+        cursor: Option<PathBuf>,
+        /// Log the batches without calling the LLM or writing tasks.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum DaemonAction {
     /// Run the daemon in the foreground until Ctrl-C.
     Run {
         /// Override the default socket path (XDG_RUNTIME_DIR/wlog.sock).
         #[arg(long, env = "WLOG_SOCKET")]
         socket: Option<PathBuf>,
+        /// Postgres URL: events go straight into the shared database
+        /// (VPS-less mode, e.g. Neon). Takes precedence over NATS.
+        #[arg(long, env = "WLOG_DAEMON_DATABASE_URL")]
+        database_url: Option<String>,
         /// NATS URL; if unset the daemon just logs incoming payloads.
         #[arg(long, env = "WLOG_NATS_URL")]
         nats_url: Option<String>,
@@ -509,6 +544,7 @@ async fn run(cli: Cli) -> Result<ExitCode> {
         Command::Dispatch { id, dry_run } => dispatch(cli.config.as_deref(), id, dry_run).await,
         Command::Hooks { action } => Ok(hooks(action)),
         Command::Daemon { action } => daemon_cmd(action).await,
+        Command::Engine { action } => engine_cmd(action).await,
         Command::Cost { days, reports_dir } => Ok(cost(days, reports_dir)),
         Command::Banner => Ok(banner_cmd()),
         Command::Setup => setup_cmd().await,
@@ -2189,6 +2225,7 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
     match action {
         DaemonAction::Run {
             socket,
+            database_url,
             nats_url,
             cc_projects_dir,
             cc_cursor,
@@ -2224,8 +2261,21 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
                     Err(_) => None,
                 },
             };
+            let database_url = match database_url {
+                Some(u) => Some(u),
+                None => match std::env::var("WLOG_DATABASE_URL_FILE") {
+                    Ok(path) => Some(
+                        std::fs::read_to_string(&path)
+                            .with_context(|| format!("reading WLOG_DATABASE_URL_FILE {path}"))?
+                            .trim()
+                            .to_string(),
+                    ),
+                    Err(_) => None,
+                },
+            };
             let config = daemon::DaemonConfig {
                 socket: socket.clone(),
+                database_url,
                 nats_url,
                 cc_projects_dir,
                 cc_cursor_path: cc_cursor,
@@ -2260,6 +2310,290 @@ async fn daemon_cmd(action: DaemonAction) -> Result<ExitCode> {
             }
         }
     }
+}
+
+async fn engine_cmd(action: EngineAction) -> Result<ExitCode> {
+    let EngineAction::Run {
+        database_url,
+        interval,
+        batch_min,
+        model,
+        cursor,
+        dry_run,
+    } = action;
+    engine_run(database_url, interval, batch_min, model, cursor, dry_run).await
+}
+
+fn default_engine_cursor_path() -> PathBuf {
+    let base = std::env::var("XDG_STATE_HOME").map_or_else(
+        |_| PathBuf::from(home_dir()).join(".local/state"),
+        PathBuf::from,
+    );
+    base.join("wlog/engine-cursor")
+}
+
+fn summarize_event(e: &wlog_proto::Event) -> String {
+    let src = wlog_storage::event_source_str(e.source);
+    let detail = e
+        .payload
+        .get("repository")
+        .and_then(|v| v.as_str())
+        .or_else(|| e.payload.get("branch").and_then(|v| v.as_str()))
+        .or_else(|| e.payload.get("cwd").and_then(|v| v.as_str()))
+        .or_else(|| e.payload.get("session_id").and_then(|v| v.as_str()))
+        .unwrap_or("");
+    format!("{src}.{} {detail}", e.kind.as_str())
+        .trim_end()
+        .to_string()
+}
+
+#[allow(clippy::too_many_lines)]
+async fn engine_run(
+    database_url: Option<String>,
+    interval_secs: u64,
+    batch_min: usize,
+    model: String,
+    cursor_path: Option<PathBuf>,
+    dry_run: bool,
+) -> Result<ExitCode> {
+    use std::collections::HashMap;
+
+    use wlog_cli::ui;
+    use wlog_engine::batch::{Batch, BatchKey};
+    use wlog_engine::llm::{AnthropicClient, AnthropicConfig};
+    use wlog_engine::synth::{OpenTaskSummary, SynthEvent, SynthesisEngine};
+
+    {
+        let mut stdout = std::io::stdout().lock();
+        let _ = banner::print_banner(&mut stdout, banner::should_color());
+    }
+    println!();
+
+    let database_url = match database_url {
+        Some(u) => u,
+        None => match std::env::var("WLOG_DATABASE_URL_FILE") {
+            Ok(path) => std::fs::read_to_string(&path)
+                .with_context(|| format!("reading WLOG_DATABASE_URL_FILE {path}"))?
+                .trim()
+                .to_string(),
+            Err(_) => {
+                ui::error("no database URL; set WLOG_DATABASE_URL or WLOG_DATABASE_URL_FILE");
+                return Ok(ExitCode::from(2));
+            }
+        },
+    };
+
+    let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
+    let live_llm = api_key.is_some() && !dry_run;
+
+    ui::banner_heading("wlog engine");
+    ui::kv("database", ui::redact_url(&database_url));
+    ui::kv("interval", format!("{interval_secs}s"));
+    ui::kv("batch-min", batch_min);
+    ui::kv("model", &model);
+    ui::kv(
+        "mode",
+        if dry_run {
+            "dry-run"
+        } else if live_llm {
+            "live"
+        } else {
+            "observe (no ANTHROPIC_API_KEY; batches logged, no synthesis)"
+        },
+    );
+    println!();
+
+    let pool = connect(&StorageConfig {
+        url: database_url,
+        max_connections: 4,
+    })
+    .await?;
+    let events_repo = EventRepo::new(pool.clone());
+    let workspaces_repo = WorkspaceRepo::new(pool.clone());
+    let tasks_repo = TaskRepo::new(pool);
+
+    let cursor_file = cursor_path.unwrap_or_else(default_engine_cursor_path);
+    let mut cursor: chrono::DateTime<chrono::Utc> = std::fs::read_to_string(&cursor_file)
+        .ok()
+        .and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s.trim())
+                .ok()
+                .map(|d| d.with_timezone(&chrono::Utc))
+        })
+        .unwrap_or(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH);
+    tracing::info!(cursor = %cursor, file = %cursor_file.display(), "engine cursor loaded");
+
+    let mut slug_cache: HashMap<uuid::Uuid, String> = HashMap::new();
+    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(interval_secs.max(5)));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut ctrl_c => {
+                ui::warning("interrupted; cursor saved");
+                break;
+            }
+            _ = ticker.tick() => {}
+        }
+
+        let rows = events_repo.list_since_ingested(cursor, 500).await?;
+        if rows.is_empty() {
+            continue;
+        }
+        let max_ingested = rows.iter().map(|(_, ing)| *ing).max().unwrap_or(cursor);
+
+        let mut by_workspace: HashMap<uuid::Uuid, Vec<wlog_proto::Event>> = HashMap::new();
+        for (event, _) in rows {
+            by_workspace
+                .entry(event.workspace_id.0)
+                .or_default()
+                .push(event);
+        }
+
+        for (ws_uuid, batch_events) in by_workspace {
+            if batch_events.len() < batch_min {
+                continue;
+            }
+            let slug = match slug_cache.get(&ws_uuid) {
+                Some(s) => s.clone(),
+                None => {
+                    let w = workspaces_repo
+                        .get(wlog_proto::WorkspaceId(ws_uuid))
+                        .await?;
+                    slug_cache.insert(ws_uuid, w.slug.clone());
+                    w.slug
+                }
+            };
+            println!(
+                "{}  {} new event(s) in {}",
+                ui::dim(&chrono::Utc::now().format("%H:%M:%S").to_string()),
+                ui::bold(&batch_events.len().to_string()),
+                ui::info(&slug),
+            );
+            if !live_llm {
+                continue;
+            }
+
+            let synth_events: Vec<SynthEvent> = batch_events
+                .iter()
+                .map(|e| SynthEvent {
+                    id: e.id,
+                    source: wlog_storage::event_source_str(e.source).to_string(),
+                    kind: e.kind.as_str().to_string(),
+                    occurred_at: e.occurred_at,
+                    summary: summarize_event(e),
+                })
+                .collect();
+            let started = synth_events
+                .iter()
+                .map(|e| e.occurred_at)
+                .min()
+                .unwrap_or_else(chrono::Utc::now);
+            let closed = synth_events
+                .iter()
+                .map(|e| e.occurred_at)
+                .max()
+                .unwrap_or_else(chrono::Utc::now);
+            let batch = Batch {
+                key: BatchKey {
+                    workspace_id: wlog_proto::WorkspaceId(ws_uuid),
+                    owner: None,
+                    repo: None,
+                },
+                events: synth_events,
+                started_at: started,
+                closed_at: closed,
+            };
+
+            let open = tasks_repo
+                .list(
+                    wlog_proto::WorkspaceId(ws_uuid),
+                    TaskListFilter {
+                        status: Some(TaskStatus::Proposed),
+                        repo: None,
+                        owner: None,
+                        limit: Some(10),
+                    },
+                )
+                .await?
+                .into_iter()
+                .map(|t| OpenTaskSummary {
+                    id: t.id,
+                    title: t.title,
+                    repo: t.repo.unwrap_or_default(),
+                })
+                .collect::<Vec<_>>();
+
+            let client = AnthropicClient::new(AnthropicConfig {
+                api_key: api_key.clone().unwrap_or_default(),
+                base_url: None,
+                version: None,
+                timeout: None,
+            })
+            .map_err(|e| anyhow!("anthropic client: {e}"))?;
+            let engine = SynthesisEngine::new(
+                client,
+                slug.clone(),
+                model.clone(),
+                vec![
+                    "feat".into(),
+                    "fix".into(),
+                    "refactor".into(),
+                    "perf".into(),
+                    "test".into(),
+                    "docs".into(),
+                    "chore".into(),
+                ],
+            )?;
+            match engine.synthesize(&batch, &open).await {
+                Ok((proposals, provenance)) => {
+                    for p in &proposals {
+                        let created = tasks_repo
+                            .create(NewTask {
+                                workspace_id: wlog_proto::WorkspaceId(ws_uuid),
+                                node_type: p.node_type,
+                                title: p.title.clone(),
+                                body: p.body.clone(),
+                                repo: p.repo.clone(),
+                                owner: None,
+                                status: None,
+                            })
+                            .await?;
+                        println!(
+                            "    {} {}  {}",
+                            ui::green("+"),
+                            ui::bold(&created.id.short()),
+                            p.title
+                        );
+                    }
+                    tracing::info!(
+                        workspace = %slug,
+                        proposals = proposals.len(),
+                        prompt = %provenance.rendered_input_hash,
+                        "synthesis complete"
+                    );
+                }
+                Err(e) => {
+                    ui::warning(format!("synthesis failed for {slug}: {e:#}"));
+                }
+            }
+        }
+
+        cursor = max_ingested;
+        if dry_run {
+            continue;
+        }
+        if let Some(parent) = cursor_file.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(&cursor_file, cursor.to_rfc3339()) {
+            tracing::warn!(error = %e, "cursor save failed");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn hooks(action: HooksAction) -> ExitCode {
