@@ -26,14 +26,14 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         // HTML dashboard
         .route("/", get(html_index))
-        .route("/w/:slug", get(html_workspace))
-        .route("/w/:slug/t/:id", get(html_task))
+        .route("/w/{slug}", get(html_workspace))
+        .route("/w/{slug}/t/{id}", get(html_task))
         .route("/static/style.css", get(static_css))
         // JSON API
         .route("/health", get(health))
         .route("/workspaces", get(list_workspaces))
-        .route("/workspaces/:slug/tasks", get(list_tasks))
-        .route("/workspaces/:slug/tasks/:id", get(get_task))
+        .route("/workspaces/{slug}/tasks", get(list_tasks))
+        .route("/workspaces/{slug}/tasks/{id}", get(get_task))
         .with_state(state)
 }
 
