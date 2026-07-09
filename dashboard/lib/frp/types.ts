@@ -65,6 +65,7 @@ export interface Enemy {
   sprite: string;
   hp: number;
   hp_max: number;
+  telegraph?: string;
 }
 
 export interface Encounter {
@@ -89,8 +90,19 @@ export interface Campaign {
   current_turn: string | null;
   round: number;
   encounter: Encounter | null;
+  doom: number;
+  quests: Quest[];
+  reputation: Record<string, number>;
+  current_location: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  status: "active" | "done" | "failed";
+  kind?: "main" | "side";
 }
 
 export type TurnKind =
@@ -101,7 +113,8 @@ export type TurnKind =
   | "combat"
   | "system"
   | "death"
-  | "transform";
+  | "transform"
+  | "levelup";
 
 export interface Turn {
   id: number;
@@ -146,10 +159,13 @@ export interface GMResult {
   scene_update?: string;
   memory_update?: string;
   encounter?: Encounter | null;
-  loot?: { handle: string; item: string }[];
+  loot?: { handle: string; item: string; rarity?: string }[];
   location?: string;
   fire?: boolean;
   heralds?: { name: string; house: string; royal?: boolean }[];
+  doom_delta?: number;
+  quests?: Quest[];
+  reputation?: Record<string, number>;
   next_turn?: string;
 }
 

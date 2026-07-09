@@ -11,7 +11,7 @@ import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/frp/prompts";
 import { rollPool, rollDie } from "@/lib/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
-import { SIN_LABEL_TR, itemNameTr } from "@/lib/frp/items";
+import { SIN_LABEL_TR, itemNameTr, itemById } from "@/lib/frp/items";
 import type {
   Character,
   Effect,
@@ -19,7 +19,42 @@ import type {
   Sin,
   Encounter,
   Turn,
+  StatusEffect,
+  Quest,
 } from "@/lib/frp/types";
+
+const SIN_POWER: Record<Sin, string> = {
+  pride: "Kibir Gücü: Mutlak Üstünlük",
+  greed: "Açgözlülük Gücü: Gasbeden",
+  lust: "Şehvet Gücü: Baştan Çıkaran Kan",
+  envy: "Haset Gücü: Taklitçi Ok",
+  gluttony: "Oburluk Gücü: Yutucu Boşluk",
+  wrath: "Öfke Gücü: Gazap Birikimi",
+  sloth: "Tembellik Gücü: Durgunluk Alanı",
+};
+
+function tickStatus(c: Character): string | null {
+  if (!c.status_effects?.length) return null;
+  let dmg = 0;
+  let heal = 0;
+  const kept: StatusEffect[] = [];
+  for (const s of c.status_effects) {
+    const id = (s.id + s.label).toLowerCase();
+    if (/(poison|zehir)/.test(id)) dmg += 3;
+    else if (/(burn|yan|alev|fire)/.test(id)) dmg += 4;
+    else if (/(bleed|kanama|kan kayb)/.test(id)) dmg += 2;
+    else if (/(regen|iyile|şifa|sifa)/.test(id)) heal += 3;
+    const turns = (s.turns ?? 3) - 1;
+    if (turns > 0) kept.push({ ...s, turns });
+  }
+  c.status_effects = kept;
+  if (dmg) c.hp_cur = Math.max(0, c.hp_cur - dmg);
+  if (heal) c.hp_cur = Math.min(c.hp_max, c.hp_cur + heal);
+  if (c.hp_cur <= 0 && c.alive) c.alive = false;
+  if (!dmg && !heal) return null;
+  const parts = [dmg ? `-${dmg} can` : "", heal ? `+${heal} can` : ""].filter(Boolean);
+  return `${c.name}: ${parts.join(", ")} (durum etkisi)`;
+}
 
 const ANTHROPIC = "https://api.anthropic.com/v1/messages";
 const SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", "sloth"];
@@ -103,8 +138,42 @@ const RESOLVE_TOOL = {
         type: "array",
         items: {
           type: "object",
-          properties: { handle: { type: "string" }, item: { type: "string" } },
+          properties: {
+            handle: { type: "string" },
+            item: { type: "string" },
+            rarity: { type: "string", description: "common, uncommon, rare, epic, or legendary" },
+          },
           required: ["handle", "item"],
+        },
+      },
+      doom_delta: {
+        type: "number",
+        description: "change to the Seventh Seal doom clock (0-100). Rises when the party fails, dawdles, or the sin weapons gather; falls when they are set back.",
+      },
+      quests: {
+        type: "array",
+        description: "the full current quest list (main and side). Return every active, done, or failed quest each turn so the log stays complete.",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            status: { type: "string", description: "active, done, or failed" },
+            kind: { type: "string", description: "main or side" },
+          },
+          required: ["id", "title", "status"],
+        },
+      },
+      reputation: {
+        type: "object",
+        description: "changes to house standing (positive or negative), keyed by house key (kanli_tac, kara_kuzgun, gumus_kurt, altin_aslan, yesil_yilan, kizil_gul).",
+        properties: {
+          kanli_tac: { type: "number" },
+          kara_kuzgun: { type: "number" },
+          gumus_kurt: { type: "number" },
+          altin_aslan: { type: "number" },
+          yesil_yilan: { type: "number" },
+          kizil_gul: { type: "number" },
         },
       },
       location: {
@@ -143,6 +212,7 @@ const RESOLVE_TOOL = {
                 name: { type: "string" },
                 hp: { type: "number" },
                 hp_max: { type: "number" },
+                telegraph: { type: "string", description: "a big attack this enemy is winding up for next turn, that players get a chance to react to" },
               },
               required: ["name", "hp", "hp_max"],
             },
@@ -152,7 +222,7 @@ const RESOLVE_TOOL = {
       },
       next_turn: { type: "string" },
     },
-    required: ["narration"],
+    required: ["narration", "quests", "doom_delta"],
   },
 };
 
@@ -299,6 +369,18 @@ export async function resolveTurn(
   if (!campaign) return { ok: false, error: "campaign not found" };
   const characters = await getCharacters(campaignId);
   const recent = await getRecentTurns(campaignId, 16);
+
+  if (!opts.isOpening) {
+    const actorChar = characters.find((c) => c.handle === actorHandle);
+    if (actorChar && actorChar.alive) {
+      const note = tickStatus(actorChar);
+      if (note) {
+        await saveCharacter(actorChar);
+        await appendTurn(campaignId, "system", "combat", note, null, campaign.round);
+      }
+    }
+  }
+
   const pool = rollPool();
   const wild = rollDie(100) <= 15;
   const model =
@@ -313,7 +395,7 @@ export async function resolveTurn(
     pool,
     wild,
   );
-  const maxTokens = opts.isOpening ? 1200 : 640;
+  const maxTokens = opts.isOpening ? 1500 : 1000;
   const gm = await callGM(model, userPrompt, maxTokens);
 
   if (!gm) {
@@ -333,7 +415,12 @@ export async function resolveTurn(
   }
 
   const byHandle = new Map(characters.map((c) => [c.handle, c]));
-  const extraTurns: { kind: Turn["kind"]; content: string; actor: string }[] = [];
+  const extraTurns: {
+    kind: Turn["kind"];
+    content: string;
+    actor: string;
+    payload?: Record<string, unknown>;
+  }[] = [];
 
   for (const e of gm.effects || []) {
     const c = byHandle.get(e.handle);
@@ -341,12 +428,15 @@ export async function resolveTurn(
     const notes = applyEffect(c, e);
     for (const n of notes) {
       if (n.startsWith("level:"))
-        extraTurns.push({ kind: "system", actor: c.handle, content: `${c.name} ${n.split(":")[1]}. seviyeye ulaştı.` });
+        extraTurns.push({ kind: "levelup", actor: c.handle, content: `${c.name} ${n.split(":")[1]}. seviyeye ulaştı! Can ve mana arttı.` });
       else if (n.startsWith("lost:"))
         extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[n.split(":")[1] as Sin]} günahına yenik düştü. Artık ona ait.` });
       else if (n.startsWith("corrupt:")) {
-        const [, sin, val] = n.split(":");
-        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[sin as Sin]} tarafından daha da ele geçiriliyor. (${val}/100)` });
+        const [, sinStr, val] = n.split(":");
+        const sin = sinStr as Sin;
+        const power = SIN_POWER[sin];
+        if (power && !c.abilities.includes(power)) c.abilities.push(power);
+        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[sin]} tarafından daha da ele geçiriliyor (${val}/100). Kazanılan güç: ${power}.` });
       } else if (n.startsWith("raised:"))
         extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, @${n.split(":")[1]} tarafından mezardan çağrıldı. Artık onun hizmetinde savaşıyor.` });
       else if (n === "death")
@@ -387,10 +477,15 @@ export async function resolveTurn(
     campaign.round,
   );
   for (const lt of gm.loot || []) {
-    extraTurns.push({ kind: "loot", actor: lt.handle, content: `${lt.handle}, ${itemNameTr(lt.item)} buldu.` });
+    extraTurns.push({
+      kind: "loot",
+      actor: lt.handle,
+      content: `${lt.handle}, ${itemNameTr(lt.item)} buldu.`,
+      payload: { item: lt.item, rarity: lt.rarity || itemById(lt.item)?.rarity || "common" },
+    });
   }
   for (const t of extraTurns)
-    await appendTurn(campaignId, t.actor, t.kind, noDash(t.content), null, campaign.round);
+    await appendTurn(campaignId, t.actor, t.kind, noDash(t.content), t.payload ?? null, campaign.round);
 
   let encounter: Encounter | null = campaign.encounter;
   if (gm.encounter) {
@@ -405,6 +500,7 @@ export async function resolveTurn(
           sprite: enemySprite(en.name),
           hp: Math.max(0, Math.round(en.hp)),
           hp_max: Math.max(1, Math.round(en.hp_max)),
+          telegraph: en.telegraph ? noDash(en.telegraph) : undefined,
         })),
       };
   }
@@ -426,6 +522,24 @@ export async function resolveTurn(
     noDash(gm.memory_update || "") ||
     (campaign.state_summary?.memory as string) ||
     "";
+  const doom = clamp(campaign.doom + (gm.doom_delta || 0), 0, 100);
+  const quests = Array.isArray(gm.quests)
+    ? gm.quests
+        .filter((q) => q && q.title)
+        .slice(0, 12)
+        .map((q) => ({
+          id: String(q.id || q.title).slice(0, 40),
+          title: noDash(String(q.title)).slice(0, 120),
+          status: ["active", "done", "failed"].includes(q.status) ? q.status : "active",
+          kind: q.kind === "main" ? "main" : "side",
+        }))
+    : campaign.quests;
+  const reputation = { ...campaign.reputation };
+  if (gm.reputation)
+    for (const [k, v] of Object.entries(gm.reputation))
+      if (houseById(k)) reputation[k] = clamp((reputation[k] || 0) + Number(v), -100, 100);
+  const currentLocation = location || campaign.current_location;
+
   await updateCampaign(campaignId, {
     status: "active",
     current_scene: noDash(gm.scene_update || "") || campaign.current_scene,
@@ -434,6 +548,10 @@ export async function resolveTurn(
     current_turn: next,
     round,
     encounter,
+    doom,
+    quests,
+    reputation,
+    current_location: currentLocation,
   });
 
   if (next && next !== actorHandle) {

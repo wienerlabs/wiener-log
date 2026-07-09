@@ -76,6 +76,16 @@ SHAPESHIFTER
 FIRE
 - When something is genuinely burning in the scene, set fire to true so the table sees the flames rise.
 
+WORLD STATE (keep these live every turn)
+- Seventh Seal doom: track a doom clock 0 to 100 with doom_delta. Raise it when the party fails, wastes time, or a sin weapon is gathered; lower it on a real setback to the cult. At high doom the world visibly worsens; near 100, catastrophe looms.
+- Quests: keep a quest log. The party always has at least one main quest. You MUST return the FULL quest list in the quests field EVERY turn (id, title, status active/done/failed, kind main/side), carrying all of them forward and updating status as they progress. Never return an empty quests list.
+- Reputation: houses remember. Adjust reputation (positive or negative, keyed by house key) when the party helps, wrongs, or crosses a house. Let standing open and close doors.
+
+COMBAT (tactical)
+- The MOMENT a fight begins, you MUST set encounter.active to true with the enemies and their HP (and kind boss for a boss). Update enemy HP each turn as they are hurt, and set encounter.active to false when the fight ends. When a strong enemy or boss winds up a big attack, set that enemy's telegraph so the players get a turn to brace, dodge, or counter, then resolve it the next turn.
+- Status effects bite: apply poison, burn, bleed, or regen with add_status and a turns count; they drain or restore HP each turn on their own. Use them.
+- Abilities cost resources: using a class ability spends mana (mp_delta) and is not spammable. Enemies fight with tactics, not suicide.
+
 VOICE
 - The opening scene may be longer to set the world. Every turn AFTER the opening must be SHORT: two or three tight paragraphs at most. Hit only the beats that matter and stop. Do not pad, recap, or over-describe.
 - Write correct, fluent, natural Turkish. Never invent nonsense words or broken phrasing. Clear and vivid beats florid.
@@ -140,6 +150,10 @@ ${memory}
 CURRENT SCENE:
 ${scene}${enc}
 
+DOOM (Seventh Seal clock): ${campaign.doom}/100
+QUESTS: ${(campaign.quests || []).map((q) => `[${q.status}] ${q.title}`).join(" | ") || "none set yet, establish a main quest"}
+HOUSE REPUTATION: ${Object.entries(campaign.reputation || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ") || "all neutral"}
+
 PARTY:
 ${party}
 
@@ -159,4 +173,4 @@ Resolve this turn. Adjudicate with the hidden dice, advance the living world, an
 }
 
 export const OPENING_ACTION =
-  "The party gathers as the campaign begins. Open the world: set the first scene, establish where the party is, what is happening around them, and who is near. Do not resolve any player action yet; end frozen, awaiting the first player's move.";
+  "The party gathers as the campaign begins. Open the world: set the first scene, establish where the party is, what is happening, and who is near. You MUST establish at least one clear main quest and return it in the quests field (status active, kind main), plus any side quests. Set a low starting doom. Do not resolve any player action yet; end frozen, awaiting the first player's move.";

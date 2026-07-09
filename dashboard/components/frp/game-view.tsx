@@ -6,6 +6,7 @@ import { Transcript } from "@/components/frp/transcript";
 import { PixelSprite, PixelBar } from "@/components/frp/pixel";
 import { ThinkingDice } from "@/components/frp/dice";
 import { FireOverlay } from "@/components/frp/fire-overlay";
+import { WorldHud } from "@/components/frp/world-hud";
 import type { Campaign, Character, Turn } from "@/lib/frp/types";
 import {
   SendHorizontal,
@@ -180,6 +181,11 @@ export function GameView({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[11.5px] font-medium" style={{ color: "var(--frp-ink)" }}>{e.name}</div>
                     <PixelBar value={e.hp} max={e.hp_max} color="var(--frp-danger)" seg={8} height={7} />
+                    {e.telegraph ? (
+                      <div className="mt-0.5 text-[9.5px] font-medium" style={{ color: "var(--frp-danger)" }}>
+                        ⚠ {e.telegraph}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -207,6 +213,33 @@ export function GameView({
 
         {joined && campaign.status === "active" ? (
           <div className="mt-4">
+            {campaign.encounter?.active && isMyTurn && myChar?.alive ? (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
+                <span className="text-[10px] font-bold tracking-wide" style={{ color: "var(--frp-danger)" }}>SAVAŞ</span>
+                {[
+                  { l: "Saldır", t: "Saldırıyorum" },
+                  { l: "Savun", t: "Kendimi savunuyorum" },
+                  { l: "Kaç", t: "Kaçmaya çalışıyorum" },
+                ].map((v) => (
+                  <button key={v.l} type="button" onClick={() => { setMode("action"); setText(v.t); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-ink-soft)", border: "1px solid var(--frp-line)" }}>
+                    {v.l}
+                  </button>
+                ))}
+                {(myChar.abilities || []).slice(0, 3).map((a) => {
+                  const name = a.split(":")[0];
+                  return (
+                    <button key={a} type="button" onClick={() => { setMode("action"); setText(`${name} yeteneğimi kullanıyorum`); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)", border: "1px solid var(--frp-line)" }}>
+                      {name}
+                    </button>
+                  );
+                })}
+                {campaign.encounter.enemies.filter((e) => e.hp > 0).map((e, i) => (
+                  <button key={i} type="button" onClick={() => setText((t) => (t ? `${t}: ${e.name}` : `${e.name} hedefime saldırıyorum`))} className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-muted)", border: "1px solid var(--frp-line)" }}>
+                    🎯 {e.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="mb-2 flex gap-1.5">
               <button
                 type="button"
@@ -291,6 +324,10 @@ export function GameView({
               <HostBtn onClick={() => control("end")} disabled={sending} icon={Square} label="Bitir" />
             ) : null}
           </div>
+        ) : null}
+
+        {campaign.status !== "lobby" && campaign.status !== "ended" ? (
+          <WorldHud campaign={campaign} />
         ) : null}
 
         <div className="text-[11px] font-semibold tracking-[0.06em]" style={{ color: "var(--frp-faint)" }}>

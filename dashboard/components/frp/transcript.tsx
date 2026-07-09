@@ -2,8 +2,9 @@ import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
 import { DiceRoll } from "@/components/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
+import { itemById, itemNameTr, RARITY_COLOR, RARITY_TR, type Rarity } from "@/lib/frp/items";
 import type { Character, Turn, HiddenRoll, Herald } from "@/lib/frp/types";
-import { Wand2, Skull, Sparkles, Swords } from "lucide-react";
+import { Wand2, Skull, Sparkles, Swords, Star } from "lucide-react";
 
 export function Transcript({
   turns,
@@ -128,10 +129,30 @@ function TurnBlock({
   }
 
   if (t.kind === "loot") {
+    const item = (t.payload?.item as string) || "";
+    const def = itemById(item);
+    const rarity = ((t.payload?.rarity as string) || def?.rarity || "common") as Rarity;
+    const color = RARITY_COLOR[rarity] || "#8b949e";
     return (
-      <div className="flex items-center justify-center gap-1.5 text-[12px] font-medium" style={{ color: "#7a5a2a" }}>
-        <Sparkles className="size-[13px]" strokeWidth={2} />
-        {t.content}
+      <div
+        className="rise mx-auto flex max-w-[360px] items-center gap-2.5 rounded-[12px] p-2.5"
+        style={{ background: "var(--frp-surface)", border: `1.5px solid ${color}`, boxShadow: `0 0 14px ${color}44` }}
+      >
+        {def ? (
+          <div className="rounded-[8px] p-1" style={{ background: "#00000010", border: `1px solid ${color}` }}>
+            <PixelSprite name={def.sprite} cell={3} glow={rarity === "legendary" || rarity === "epic" ? color : undefined} />
+          </div>
+        ) : (
+          <Sparkles className="size-[16px]" style={{ color }} strokeWidth={2} />
+        )}
+        <div>
+          <div className="text-[12.5px] font-semibold" style={{ color: "var(--frp-ink)" }}>
+            {def ? itemNameTr(item) : item}
+          </div>
+          <div className="text-[10px] font-medium" style={{ color }}>
+            {RARITY_TR[rarity] || rarity} · {t.actor} buldu
+          </div>
+        </div>
       </div>
     );
   }
@@ -149,6 +170,15 @@ function TurnBlock({
     return (
       <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold" style={{ background: "var(--frp-danger-soft)", color: "var(--frp-danger)" }}>
         <Skull className="size-[14px] shrink-0" strokeWidth={2} />
+        {t.content}
+      </div>
+    );
+  }
+
+  if (t.kind === "levelup") {
+    return (
+      <div className="rise mx-auto flex max-w-[520px] items-center justify-center gap-2 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)", border: "1px solid var(--frp-accent)" }}>
+        <Star className="size-[14px] shrink-0" fill="currentColor" strokeWidth={0} />
         {t.content}
       </div>
     );

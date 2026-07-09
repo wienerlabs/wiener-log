@@ -27,6 +27,10 @@ function fields(c: Campaign, o: Partial<Campaign> = {}) {
     current_turn: o.current_turn !== undefined ? o.current_turn : c.current_turn,
     round: o.round ?? c.round,
     encounter: o.encounter !== undefined ? o.encounter : c.encounter,
+    doom: o.doom ?? c.doom,
+    quests: o.quests ?? c.quests,
+    reputation: o.reputation ?? c.reputation,
+    current_location: o.current_location !== undefined ? o.current_location : c.current_location,
   };
 }
 

@@ -52,6 +52,7 @@ export async function getCampaign(id: number): Promise<Campaign | null> {
   const rows = (await sql`
     SELECT id, title, setting, tone, status, host, gm_model, difficulty,
       current_scene, state_summary, turn_order, current_turn, round, encounter,
+      doom, quests, reputation, current_location,
       created_at, updated_at
     FROM campaigns WHERE id = ${id} LIMIT 1
   `) as Campaign[];
@@ -68,6 +69,10 @@ export async function updateCampaign(
     current_turn: string | null;
     round: number;
     encounter: Encounter | null;
+    doom?: number;
+    quests?: unknown[];
+    reputation?: Record<string, number>;
+    current_location?: string | null;
   },
 ): Promise<void> {
   await sql`
@@ -79,6 +84,10 @@ export async function updateCampaign(
       current_turn = ${fields.current_turn},
       round = ${fields.round},
       encounter = ${fields.encounter ? JSON.stringify(fields.encounter) : null}::jsonb,
+      doom = ${fields.doom ?? 0},
+      quests = ${JSON.stringify(fields.quests ?? [])}::jsonb,
+      reputation = ${JSON.stringify(fields.reputation ?? {})}::jsonb,
+      current_location = ${fields.current_location ?? null},
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -195,7 +204,9 @@ export async function restartCampaign(campaignId: number): Promise<void> {
     UPDATE campaigns SET
       status = 'lobby', current_scene = null,
       state_summary = '{}'::jsonb, current_turn = null,
-      round = 0, encounter = null, updated_at = now()
+      round = 0, encounter = null,
+      doom = 0, quests = '[]'::jsonb, reputation = '{}'::jsonb, current_location = null,
+      updated_at = now()
     WHERE id = ${campaignId}
   `;
 }
