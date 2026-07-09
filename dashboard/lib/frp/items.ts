@@ -254,3 +254,84 @@ export const RARITY_TR: Record<Rarity, string> = {
   epic: "destansı",
   legendary: "efsanevi",
 };
+
+const PRICES: Record<string, number> = {
+  bread: 8,
+  torch: 10,
+  arrows: 25,
+  potion_health: 40,
+  potion_mana: 45,
+  scroll: 90,
+  key: 50,
+  dagger: 60,
+  shield: 90,
+  leather_armor: 80,
+  spear: 100,
+  mace: 110,
+  sword: 120,
+  staff: 120,
+  bow: 130,
+  rapier: 230,
+  crossbow: 240,
+  warhammer: 250,
+  greatsword: 260,
+  chain_armor: 220,
+  plate_armor: 520,
+  ring: 400,
+  gem: 350,
+};
+
+export function itemPrice(id: string): number {
+  return PRICES[id] ?? 0;
+}
+
+export function sellPrice(id: string): number {
+  return Math.floor(itemPrice(id) * 0.4);
+}
+
+export function priceWithDoom(base: number, doom: number): number {
+  return Math.round(base * (1 + Math.max(0, Math.min(100, doom)) / 250));
+}
+
+export const MARKET_STOCK: string[] = [
+  "potion_health",
+  "potion_mana",
+  "bread",
+  "torch",
+  "arrows",
+  "scroll",
+  "key",
+  "dagger",
+  "sword",
+  "spear",
+  "mace",
+  "bow",
+  "staff",
+  "shield",
+  "leather_armor",
+];
+
+export const FORGE_STOCK: string[] = [
+  "chain_armor",
+  "plate_armor",
+  "greatsword",
+  "crossbow",
+  "warhammer",
+  "rapier",
+  "shield",
+];
+
+export interface ForgeUpgrade {
+  from: string;
+  to: string;
+  cost: number;
+}
+
+export const FORGE_UPGRADES: ForgeUpgrade[] = [
+  { from: "sword", to: "greatsword", cost: 140 },
+  { from: "dagger", to: "rapier", cost: 170 },
+  { from: "mace", to: "warhammer", cost: 140 },
+  { from: "bow", to: "crossbow", cost: 110 },
+  { from: "leather_armor", to: "chain_armor", cost: 140 },
+  { from: "chain_armor", to: "plate_armor", cost: 300 },
+];

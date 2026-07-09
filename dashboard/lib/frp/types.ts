@@ -94,8 +94,27 @@ export interface Campaign {
   quests: Quest[];
   reputation: Record<string, number>;
   current_location: string | null;
+  position: string | null;
+  discovered: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface WorldState {
+  doom: number;
+  factions: Record<string, number>;
+  relics: Sin[];
+  node_control: Record<string, string>;
+  updated_at?: string;
+}
+
+export interface WorldEvent {
+  id: number;
+  campaign_id: number | null;
+  kind: string;
+  text: string;
+  house: string | null;
+  created_at: string;
 }
 
 export interface Quest {
@@ -166,6 +185,10 @@ export interface GMResult {
   doom_delta?: number;
   quests?: Quest[];
   reputation?: Record<string, number>;
+  world_event?: string;
+  world_doom_delta?: number;
+  faction_delta?: Record<string, number>;
+  captures?: { node: string; house: string }[];
   next_turn?: string;
 }
 

@@ -7,7 +7,8 @@ import { PixelSprite, PixelBar } from "@/components/frp/pixel";
 import { ThinkingDice } from "@/components/frp/dice";
 import { FireOverlay } from "@/components/frp/fire-overlay";
 import { WorldHud } from "@/components/frp/world-hud";
-import type { Campaign, Character, Turn } from "@/lib/frp/types";
+import { ShopPanel } from "@/components/frp/shop-panel";
+import type { Campaign, Character, Turn, WorldState } from "@/lib/frp/types";
 import {
   SendHorizontal,
   Play,
@@ -23,6 +24,7 @@ export function GameView({
   initialCampaign,
   initialCharacters,
   initialTurns,
+  initialWorld,
   me,
   isHost,
   joined,
@@ -31,6 +33,7 @@ export function GameView({
   initialCampaign: Campaign;
   initialCharacters: Character[];
   initialTurns: Turn[];
+  initialWorld: WorldState;
   me: string;
   isHost: boolean;
   joined: boolean;
@@ -38,6 +41,7 @@ export function GameView({
   const [campaign, setCampaign] = useState(initialCampaign);
   const [characters, setCharacters] = useState(initialCharacters);
   const [turns, setTurns] = useState(initialTurns);
+  const [world, setWorld] = useState(initialWorld);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"action" | "talk">("talk");
   const [sending, setSending] = useState(false);
@@ -66,9 +70,11 @@ export function GameView({
         campaign: Campaign;
         characters: Character[];
         turns: Turn[];
+        world?: WorldState;
       };
       setCampaign(d.campaign);
       setCharacters(d.characters);
+      if (d.world) setWorld(d.world);
       if (d.turns.length) {
         let added = false;
         setTurns((prev) => {
@@ -112,6 +118,24 @@ export function GameView({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: t, mode }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+    setSending(false);
+    setThinking(false);
+  };
+
+  const travel = async (nodeKey: string) => {
+    if (sending) return;
+    setSending(true);
+    setThinking(true);
+    try {
+      await fetch(`/api/frp/${id}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ travel: nodeKey }),
       });
       await poll();
     } catch {
@@ -224,6 +248,9 @@ export function GameView({
 
         {joined && campaign.status === "active" ? (
           <div className="mt-4">
+            {myChar?.alive && !campaign.encounter?.active ? (
+              <ShopPanel id={id} position={campaign.position} doom={world.doom} myChar={myChar} onDone={poll} />
+            ) : null}
             {campaign.encounter?.active && isMyTurn && myChar?.alive ? (
               <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
                 <span className="text-[10px] font-bold tracking-wide" style={{ color: "var(--frp-danger)" }}>SAVAŞ</span>
@@ -338,7 +365,13 @@ export function GameView({
         ) : null}
 
         {campaign.status !== "lobby" && campaign.status !== "ended" ? (
-          <WorldHud campaign={campaign} />
+          <WorldHud
+            campaign={campaign}
+            world={world}
+            canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
+            onTravel={travel}
+            busy={sending}
+          />
         ) : null}
 
         <div className="text-[11px] font-semibold tracking-[0.06em]" style={{ color: "var(--frp-faint)" }}>

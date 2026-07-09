@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import type { Campaign, Character, Turn, TurnKind, Encounter } from "@/lib/frp/types";
+import { START_NODE } from "@/lib/frp/worldmap";
 
 const CAMPAIGN_COLS = `id, title, setting, tone, status, host, gm_model, difficulty,
   current_scene, state_summary, turn_order, current_turn, round, encounter,
@@ -14,9 +15,9 @@ export async function createCampaign(input: {
   difficulty: string;
 }): Promise<number> {
   const rows = (await sql`
-    INSERT INTO campaigns (title, setting, tone, host, gm_model, difficulty, status, turn_order)
+    INSERT INTO campaigns (title, setting, tone, host, gm_model, difficulty, status, turn_order, position, discovered)
     VALUES (${input.title}, ${input.setting}, ${input.tone}, ${input.host},
-            ${input.gm_model}, ${input.difficulty}, 'lobby', '[]'::jsonb)
+            ${input.gm_model}, ${input.difficulty}, 'lobby', '[]'::jsonb, ${START_NODE}, ${JSON.stringify([START_NODE])}::jsonb)
     RETURNING id
   `) as { id: number }[];
   return rows[0].id;
@@ -52,7 +53,7 @@ export async function getCampaign(id: number): Promise<Campaign | null> {
   const rows = (await sql`
     SELECT id, title, setting, tone, status, host, gm_model, difficulty,
       current_scene, state_summary, turn_order, current_turn, round, encounter,
-      doom, quests, reputation, current_location,
+      doom, quests, reputation, current_location, position, discovered,
       created_at, updated_at
     FROM campaigns WHERE id = ${id} LIMIT 1
   `) as Campaign[];
@@ -73,6 +74,8 @@ export async function updateCampaign(
     quests?: unknown[];
     reputation?: Record<string, number>;
     current_location?: string | null;
+    position?: string | null;
+    discovered?: string[];
   },
 ): Promise<void> {
   await sql`
@@ -88,6 +91,8 @@ export async function updateCampaign(
       quests = ${JSON.stringify(fields.quests ?? [])}::jsonb,
       reputation = ${JSON.stringify(fields.reputation ?? {})}::jsonb,
       current_location = ${fields.current_location ?? null},
+      position = ${fields.position ?? START_NODE},
+      discovered = ${JSON.stringify(fields.discovered ?? [START_NODE])}::jsonb,
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -206,6 +211,7 @@ export async function restartCampaign(campaignId: number): Promise<void> {
       state_summary = '{}'::jsonb, current_turn = null,
       round = 0, encounter = null,
       doom = 0, quests = '[]'::jsonb, reputation = '{}'::jsonb, current_location = null,
+      position = ${START_NODE}, discovered = ${JSON.stringify([START_NODE])}::jsonb,
       updated_at = now()
     WHERE id = ${campaignId}
   `;

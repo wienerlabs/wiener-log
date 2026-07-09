@@ -9,6 +9,7 @@ import {
 } from "@/lib/frp/db";
 import { resolveTurn } from "@/lib/frp/engine";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
+import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import type { Campaign } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ function fields(c: Campaign, o: Partial<Campaign> = {}) {
     quests: o.quests ?? c.quests,
     reputation: o.reputation ?? c.reputation,
     current_location: o.current_location !== undefined ? o.current_location : c.current_location,
+    position: o.position !== undefined ? o.position : c.position,
+    discovered: o.discovered ?? c.discovered,
   };
 }
 
@@ -50,6 +53,7 @@ export async function POST(
     control?: string;
     text?: string;
     mode?: string;
+    travel?: string;
   };
 
   if (body.control) {
@@ -121,6 +125,24 @@ export async function POST(
       return Response.json({ ok: true });
     }
     return Response.json({ error: "unknown control" }, { status: 400 });
+  }
+
+  if (body.travel) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    if (campaign.current_turn !== handle)
+      return Response.json({ error: "not your turn" }, { status: 409 });
+    if (campaign.encounter?.active)
+      return Response.json({ error: "savaşta seyahat edilmez" }, { status: 400 });
+    const dest = WORLD_MAP[body.travel];
+    if (!dest || !campaign.position || !areNeighbors(campaign.position, dest.key))
+      return Response.json({ error: "oraya buradan gidilmez" }, { status: 400 });
+    const ch = await getCharacter(campaignId, handle);
+    if (!ch || !ch.alive)
+      return Response.json({ error: "no living character" }, { status: 400 });
+    await appendTurn(campaignId, handle, "action", `${dest.name} yönüne yola çıkıyorum.`, null, campaign.round);
+    const r = await resolveTurn(campaignId, handle, `Takım ${dest.name} yönüne yola çıkıyor.`, { travelTo: dest.key });
+    return Response.json({ ok: r.ok, narration: r.narration, error: r.error });
   }
 
   const text = String(body.text || "").slice(0, 1500).trim();

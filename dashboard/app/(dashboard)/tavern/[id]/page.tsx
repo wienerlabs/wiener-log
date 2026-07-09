@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
 import { getCampaign, getCharacters, getTurns } from "@/lib/frp/db";
+import { getWorld } from "@/lib/frp/world";
 import { GameView } from "@/components/frp/game-view";
 import { JoinPanel } from "@/components/frp/join-panel";
 import Link from "next/link";
@@ -24,9 +25,10 @@ export default async function CampaignPage({
   if (!Number.isFinite(cid)) notFound();
   const campaign = await getCampaign(cid);
   if (!campaign) notFound();
-  const [characters, turns] = await Promise.all([
+  const [characters, turns, world] = await Promise.all([
     getCharacters(cid),
     getTurns(cid, 0, 400),
+    getWorld(),
   ]);
   const joined = characters.some((c) => c.handle === handle);
   const isHost = campaign.host === handle || session?.role === "admin";
@@ -66,6 +68,7 @@ export default async function CampaignPage({
           initialCampaign={campaign}
           initialCharacters={characters}
           initialTurns={turns}
+          initialWorld={world}
           me={handle}
           isHost={isHost}
           joined={joined}

@@ -12,6 +12,9 @@ import { rollPool, rollDie } from "@/lib/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
 import { SIN_LABEL_TR, itemNameTr, itemById } from "@/lib/frp/items";
+import { getWorld, saveWorld, addWorldEvent, listWorldEvents } from "@/lib/frp/world";
+import { nodeByKey, WORLD_MAP } from "@/lib/frp/worldmap";
+import type { MapNode } from "@/lib/frp/worldmap";
 import type {
   Character,
   Effect,
@@ -174,6 +177,38 @@ const RESOLVE_TOOL = {
           altin_aslan: { type: "number" },
           yesil_yilan: { type: "number" },
           kizil_gul: { type: "number" },
+        },
+      },
+      world_event: {
+        type: "string",
+        description: "One short Turkish line for the SHARED world feed that every other party will see, ONLY when something momentous happened that the whole continent would hear about (a boss fell, a sin weapon surfaced, a house seized or lost land, a city changed hands). Omit on ordinary turns.",
+      },
+      world_doom_delta: {
+        type: "number",
+        description: "small change to the GLOBAL Seventh Seal clock shared by every party across the world (0-100). Positive only when the sins truly gain ground anywhere; usually 0.",
+      },
+      faction_delta: {
+        type: "object",
+        description: "shift in how much of the land each noble house controls (points, positive or negative), keyed by house key, when a house wins or loses real power this turn.",
+        properties: {
+          kanli_tac: { type: "number" },
+          kara_kuzgun: { type: "number" },
+          gumus_kurt: { type: "number" },
+          altin_aslan: { type: "number" },
+          yesil_yilan: { type: "number" },
+          kizil_gul: { type: "number" },
+        },
+      },
+      captures: {
+        type: "array",
+        description: "map locations that changed hands this turn (only real, earned shifts).",
+        items: {
+          type: "object",
+          properties: {
+            node: { type: "string", description: "map node key" },
+            house: { type: "string", description: "house key now controlling it" },
+          },
+          required: ["node", "house"],
         },
       },
       location: {
@@ -363,12 +398,19 @@ export async function resolveTurn(
   campaignId: number,
   actorHandle: string,
   action: string,
-  opts: { isOpening?: boolean } = {},
+  opts: { isOpening?: boolean; travelTo?: string } = {},
 ): Promise<TurnResult> {
   const campaign = await getCampaign(campaignId);
   if (!campaign) return { ok: false, error: "campaign not found" };
   const characters = await getCharacters(campaignId);
   const recent = await getRecentTurns(campaignId, 16);
+  const world = await getWorld();
+  const worldFeed = await listWorldEvents(6);
+  const node = nodeByKey(campaign.position);
+  const neighbors = (node?.neighbors || [])
+    .map(nodeByKey)
+    .filter((n): n is MapNode => !!n);
+  const dest = opts.travelTo ? nodeByKey(opts.travelTo) : null;
 
   if (!opts.isOpening) {
     const actorChar = characters.find((c) => c.handle === actorHandle);
@@ -394,6 +436,7 @@ export async function resolveTurn(
     action,
     pool,
     wild,
+    { world, worldFeed, node, neighbors, dest },
   );
   const maxTokens = opts.isOpening ? 1500 : 850;
   let gm = await callGM(model, userPrompt, maxTokens);
@@ -544,6 +587,53 @@ export async function resolveTurn(
       if (houseById(k)) reputation[k] = clamp((reputation[k] || 0) + Number(v), -100, 100);
   const currentLocation = location || campaign.current_location;
 
+  const worldEventQueue: { kind: string; text: string; house: string | null }[] = [];
+  const relicSins = new Set(world.relics);
+  let worldDoom = world.doom;
+  const relicIds = [
+    ...characters.flatMap((c) => [c.wielded, ...(c.inventory || []).map((i) => i.id)]),
+    ...(gm.loot || []).map((l) => l.item),
+  ].filter(Boolean) as string[];
+  for (const id of relicIds) {
+    const s = itemById(id)?.sin;
+    if (s && !relicSins.has(s)) {
+      relicSins.add(s);
+      worldDoom = clamp(worldDoom + 14, 0, 100);
+      worldEventQueue.push({ kind: "relic", text: `Bir günah silahı yüzeye çıktı: ${itemNameTr(id)}.`, house: null });
+    }
+  }
+  if (gm.world_doom_delta) worldDoom = clamp(worldDoom + Number(gm.world_doom_delta), 0, 100);
+  if (gm.faction_delta)
+    for (const [k, v] of Object.entries(gm.faction_delta))
+      if (houseById(k)) world.factions[k] = clamp((world.factions[k] ?? 50) + Number(v), 0, 100);
+  if (Array.isArray(gm.captures))
+    for (const cap of gm.captures.slice(0, 4)) {
+      const h = houseById(cap?.house || "");
+      if (cap?.node && WORLD_MAP[cap.node] && h && world.node_control[cap.node] !== cap.house) {
+        world.node_control[cap.node] = cap.house;
+        worldEventQueue.push({ kind: "capture", text: `${WORLD_MAP[cap.node].name}, ${h.name} hanedanının eline geçti.`, house: cap.house });
+      }
+    }
+  const bossFell =
+    campaign.encounter?.active &&
+    campaign.encounter.kind === "boss" &&
+    !encounter?.active;
+  if (bossFell) worldEventQueue.push({ kind: "boss", text: `${campaign.encounter!.name} düştü. Yankısı tüm kıtada duyuldu.`, house: null });
+  if (gm.world_event && String(gm.world_event).trim())
+    worldEventQueue.push({ kind: "gm", text: noDash(String(gm.world_event)).slice(0, 160), house: null });
+
+  world.relics = Array.from(relicSins);
+  world.doom = worldDoom;
+  await saveWorld(world);
+  for (const ev of worldEventQueue.slice(0, 4))
+    await addWorldEvent(campaignId, ev.kind, ev.text.slice(0, 160), ev.house);
+
+  const position = dest ? dest.key : campaign.position;
+  const discovered =
+    dest && !(campaign.discovered || []).includes(dest.key)
+      ? [...(campaign.discovered || []), dest.key]
+      : campaign.discovered || [];
+
   await updateCampaign(campaignId, {
     status: "active",
     current_scene: noDash(gm.scene_update || "") || campaign.current_scene,
@@ -556,6 +646,8 @@ export async function resolveTurn(
     quests,
     reputation,
     current_location: currentLocation,
+    position,
+    discovered,
   });
 
   if (next && next !== actorHandle) {

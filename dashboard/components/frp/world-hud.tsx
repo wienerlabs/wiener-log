@@ -1,16 +1,30 @@
-import { LOCATIONS } from "@/lib/frp/locations";
 import { HOUSES } from "@/lib/frp/houses";
-import { PixelSprite } from "@/components/frp/pixel";
-import type { Campaign } from "@/lib/frp/types";
+import { PixelSprite, SinSigil } from "@/components/frp/pixel";
+import { WorldMap } from "@/components/frp/world-map";
+import type { Campaign, WorldState, Sin } from "@/lib/frp/types";
 import { Skull, ScrollText, Check, X } from "lucide-react";
 
-export function WorldHud({ campaign }: { campaign: Campaign }) {
+const ALL_SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", "sloth"];
+
+export function WorldHud({
+  campaign,
+  world,
+  canTravel,
+  onTravel,
+  busy,
+}: {
+  campaign: Campaign;
+  world: WorldState;
+  canTravel: boolean;
+  onTravel: (key: string) => void;
+  busy: boolean;
+}) {
   const doom = campaign.doom || 0;
   const quests = campaign.quests || [];
   const rep = campaign.reputation || {};
   const repHouses = HOUSES.filter((h) => rep[h.id] !== undefined && rep[h.id] !== 0);
-  const cur = campaign.current_location;
   const green = "#3f7a4a";
+  const relics = new Set(world.relics || []);
 
   return (
     <div className="rounded-[14px] p-3.5" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
@@ -83,23 +97,33 @@ export function WorldHud({ campaign }: { campaign: Campaign }) {
       ) : null}
 
       <div className="mt-3">
-        <div className="mb-1 text-[10.5px] font-semibold tracking-[0.05em]" style={{ color: "var(--frp-faint)" }}>
-          Konum
+        <WorldMap
+          position={campaign.position}
+          discovered={campaign.discovered || []}
+          nodeControl={world.node_control || {}}
+          canTravel={canTravel}
+          onTravel={onTravel}
+          busy={busy}
+        />
+      </div>
+
+      <div className="mt-3 border-t pt-2.5" style={{ borderColor: "var(--frp-line)" }}>
+        <div className="flex items-center justify-between text-[10px] font-semibold" style={{ color: "var(--frp-faint)" }}>
+          <span className="tracking-[0.05em]">Yaşayan dünya · Yedinci Mühür</span>
+          <span className="tabular-nums" style={{ color: "var(--frp-danger)" }}>{world.doom}/100</span>
         </div>
-        <div className="flex flex-wrap gap-1">
-          {LOCATIONS.map((l) => (
-            <span
-              key={l.key}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                background: cur === l.key ? "var(--frp-accent)" : "var(--frp-canvas)",
-                color: cur === l.key ? "#fff" : "var(--frp-muted)",
-                border: "1px solid var(--frp-line)",
-              }}
-            >
-              {l.tr}
-            </span>
-          ))}
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--frp-track)" }}>
+          <div className="h-full rounded-full" style={{ width: `${world.doom}%`, background: "var(--frp-corrupt)" }} />
+        </div>
+        <div className="mt-1.5 flex items-center gap-1">
+          <span className="text-[10px]" style={{ color: "var(--frp-muted)" }}>Serbest günah silahı {relics.size}/7</span>
+          <span className="ml-auto flex items-center gap-0.5">
+            {ALL_SINS.map((s) => (
+              <span key={s} style={{ opacity: relics.has(s) ? 1 : 0.2 }}>
+                <SinSigil sin={s} size={11} />
+              </span>
+            ))}
+          </span>
         </div>
       </div>
     </div>

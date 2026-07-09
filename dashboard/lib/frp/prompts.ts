@@ -1,8 +1,10 @@
-import type { Campaign, Character, Turn } from "@/lib/frp/types";
-import { ITEM_CATALOG } from "@/lib/frp/items";
-import { houseById } from "@/lib/frp/houses";
+import type { Campaign, Character, Turn, WorldState, WorldEvent } from "@/lib/frp/types";
+import { ITEM_CATALOG, SIN_LABEL_TR } from "@/lib/frp/items";
+import { houseById, HOUSES } from "@/lib/frp/houses";
 import { poolToPrompt, type DicePool } from "@/lib/frp/dice";
 import { locationsForPrompt } from "@/lib/frp/locations";
+import { factionControl } from "@/lib/frp/world";
+import { KIND_TR, type MapNode } from "@/lib/frp/worldmap";
 
 export const SYSTEM_PROMPT = `You are the Game Master of a dark-fantasy tabletop RPG played by a party of adventurers over chat. You are a veteran GM who has run grim, living worlds for decades. Your job is not to tell a story to one hero. Your job is to run a living, breathing world that moves with or without the party.
 
@@ -81,6 +83,12 @@ WORLD STATE (keep these live every turn)
 - Quests: keep a quest log. The party always has at least one main quest. You MUST return the FULL quest list in the quests field EVERY turn (id, title, status active/done/failed, kind main/side), carrying all of them forward and updating status as they progress. Never return an empty quests list.
 - Reputation: houses remember. Adjust reputation (positive or negative, keyed by house key) when the party helps, wrongs, or crosses a house. Let standing open and close doors.
 
+SHARED LIVING WORLD AND MAP
+- Every party plays inside ONE shared world. A GLOBAL Seventh Seal clock, the sin weapons already loose, and which house controls the land are given to you each turn. Honor them: if another party already let a sin weapon surface or lost a city, that has happened; weave it in.
+- When something momentous happens that the whole continent would hear about (a boss falls, a sin weapon surfaces, a house seizes or loses land, a city changes hands), write ONE short Turkish line in world_event so every other party sees it in their world feed. Do this only for real, momentous events, never for ordinary turns.
+- Shift real power with faction_delta (a house winning or losing control) and captures (a specific map location changing hands) only when it is truly earned in the story. Nudge the global clock with world_doom_delta only when the sins genuinely gain ground anywhere.
+- The party moves across a map of named places (a hub city, markets, a forge, wilds, dungeons, a boss lair, a still sanctum), each held by a house. You are told where they stand and where they can travel next. Set scenes that fit the place. When the party travels, narrate the road briefly and land them at the new place; keep it short.
+
 COMBAT (tactical)
 - The MOMENT a fight begins, you MUST set encounter.active to true with the enemies and their HP (and kind boss for a boss). Update enemy HP each turn as they are hurt, and set encounter.active to false when the fight ends. When a strong enemy or boss winds up a big attack, set that enemy's telegraph so the players get a turn to brace, dodge, or counter, then resolve it the next turn.
 - Status effects bite: apply poison, burn, bleed, or regen with add_status and a turns count; they drain or restore HP each turn on their own. Use them.
@@ -121,6 +129,13 @@ export function buildUserPrompt(
   action: string,
   pool: DicePool,
   wild: boolean,
+  ctx: {
+    world: WorldState;
+    worldFeed: WorldEvent[];
+    node?: MapNode;
+    neighbors: MapNode[];
+    dest?: MapNode | null;
+  },
 ): string {
   const memory =
     (campaign.state_summary?.memory as string) || "This is the opening of the campaign.";
@@ -139,6 +154,30 @@ export function buildUserPrompt(
     : "";
   const items = Object.keys(ITEM_CATALOG).join(", ");
 
+  const here = ctx.node;
+  const hereHouseKey = here ? ctx.world.node_control[here.key] || here.house : null;
+  const hereHouse = hereHouseKey ? houseById(hereHouseKey) : null;
+  const relics = ctx.world.relics.length
+    ? ctx.world.relics.map((s) => SIN_LABEL_TR[s]).join(", ")
+    : "none surfaced yet";
+  const factions = HOUSES.map((h) => `${h.name} ${factionControl(ctx.world, h.id)}`).join(", ");
+  const feed = ctx.worldFeed.length
+    ? ctx.worldFeed.slice(0, 5).map((e) => `- ${e.text}`).join("\n")
+    : "- (quiet for now)";
+  const worldBlock = `GLOBAL WORLD (shared by every party, moves on its own):
+- Seventh Seal (global clock): ${ctx.world.doom}/100
+- Sin weapons loose in the world: ${relics}
+- House control of the land: ${factions}
+- Recent world events other parties triggered:
+${feed}`;
+  const mapBlock = here
+    ? `MAP: the party stands at ${here.name} (${KIND_TR[here.kind]}${hereHouse ? `, held by House ${hereHouse.name}` : ""}). ${here.blurb}
+They can travel next to: ${ctx.neighbors.map((n) => `${n.name} (${KIND_TR[n.kind]})`).join("; ") || "nowhere nearby"}.`
+    : "";
+  const travelBlock = ctx.dest
+    ? `\nTRAVEL THIS TURN: the party leaves ${here?.name || "here"} and journeys to ${ctx.dest.name} (${KIND_TR[ctx.dest.kind]}). Narrate the road and their arrival in a few short sentences; a wild encounter may occur on the way if it fits. End the scene at ${ctx.dest.name}.`
+    : "";
+
   return `CAMPAIGN: ${campaign.title}
 SETTING: ${campaign.setting}
 TONE: ${campaign.tone || "grim, novelistic"}
@@ -150,9 +189,13 @@ ${memory}
 CURRENT SCENE:
 ${scene}${enc}
 
-DOOM (Seventh Seal clock): ${campaign.doom}/100
+DOOM (this party's local Seventh Seal clock): ${campaign.doom}/100
 QUESTS: ${(campaign.quests || []).map((q) => `[${q.status}] ${q.title}`).join(" | ") || "none set yet, establish a main quest"}
-HOUSE REPUTATION: ${Object.entries(campaign.reputation || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ") || "all neutral"}
+HOUSE REPUTATION (this party): ${Object.entries(campaign.reputation || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ") || "all neutral"}
+
+${worldBlock}
+
+${mapBlock}${travelBlock}
 
 PARTY:
 ${party}
