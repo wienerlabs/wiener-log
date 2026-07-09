@@ -9,6 +9,8 @@ const ADMIN_ONLY = [
   "/workspaces",
   "/onboarding",
   "/reports",
+  "/briefing",
+  "/expertise",
 ];
 
 export async function middleware(req: NextRequest) {

@@ -4,6 +4,7 @@ import {
   getMemberActivity,
   getMemberActivityStats,
   listPersonalDocs,
+  getMemberExpertise,
 } from "@/lib/db";
 import { relativeTime, shortId } from "@/lib/utils";
 import {
@@ -16,6 +17,7 @@ import {
   Avatar,
   OrgBadge,
   GithubMark,
+  LanguageDot,
 } from "@/components/ui";
 import { ActivityFeed } from "@/components/activity-feed";
 import { AssignForm } from "@/components/assign-form";
@@ -43,7 +45,7 @@ export default async function MemberDetail({
       : session?.username || "";
   const isOwn = me.toLowerCase() === handle.toLowerCase();
 
-  const [tasks, activity, activityStats, docs] = await Promise.all([
+  const [tasks, activity, activityStats, docs, expertise] = await Promise.all([
     getMemberTasks(handle),
     member.workspace_slug
       ? getMemberActivity(member.workspace_slug, 40)
@@ -52,6 +54,7 @@ export default async function MemberDetail({
       ? getMemberActivityStats(member.workspace_slug)
       : Promise.resolve({ d7: 0, d30: 0, total: 0, last_at: null }),
     listPersonalDocs(handle),
+    getMemberExpertise(member.handle),
   ]);
 
   return (
@@ -176,6 +179,36 @@ export default async function MemberDetail({
           </Card>
         </div>
       </div>
+
+      {expertise.repos.length ? (
+        <div className="mt-8">
+          <SectionHeader title="Expertise" action={<span>where they work</span>} />
+          <Card className="p-5">
+            {expertise.languages.length ? (
+              <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                {expertise.languages.slice(0, 6).map((l) => (
+                  <LanguageDot key={l.language} language={l.language} />
+                ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {expertise.repos.map((r) => (
+                <Link
+                  key={r.repo}
+                  href={`/projects/${r.name}`}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-line-soft)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--color-ink-soft)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
+                >
+                  <FolderGit2 className="size-[13px]" strokeWidth={2} />
+                  {r.name}
+                  <span className="tabular-nums text-[var(--color-faint)]">
+                    {r.contributions}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <SectionHeader

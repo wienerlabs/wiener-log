@@ -42,7 +42,8 @@ ${lines}`;
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { content?: { text?: string }[] };
-    return (data.content?.[0]?.text || "").trim() || null;
+    const text = (data.content?.[0]?.text || "").trim().replace(/[—–]/g, "-");
+    return text || null;
   } catch {
     return null;
   }

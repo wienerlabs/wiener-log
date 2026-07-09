@@ -22,6 +22,8 @@ import {
   Megaphone,
   Sunrise,
   Target,
+  Network,
+  Radar,
   LogOut,
   Search,
 } from "lucide-react";
@@ -52,6 +54,8 @@ const company = [
 ];
 
 const signals = [
+  { href: "/briefing", label: "Briefing", icon: Radar },
+  { href: "/expertise", label: "Expertise", icon: Network },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
   { href: "/events", label: "Events", icon: Radio },
   { href: "/workspaces", label: "Workspaces", icon: LayoutGrid },

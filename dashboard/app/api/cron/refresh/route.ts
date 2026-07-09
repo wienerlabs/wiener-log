@@ -1,6 +1,7 @@
 import { refreshGithubData } from "@/lib/refresh";
 import { generateForTopProjects } from "@/lib/suggest";
 import { generateAllStandups } from "@/lib/standup";
+import { generateBriefing } from "@/lib/briefing";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,14 +21,21 @@ export async function GET(req: Request) {
     } catch {
       /* suggestions are best-effort */
     }
+    const today = new Date().toISOString().slice(0, 10);
     let standups = 0;
     try {
-      const today = new Date().toISOString().slice(0, 10);
       standups = await generateAllStandups(today);
     } catch {
       /* standups are best-effort */
     }
-    return Response.json({ ok: true, ...result, suggestions, standups });
+    let briefing = false;
+    try {
+      await generateBriefing(today);
+      briefing = true;
+    } catch {
+      /* briefing is best-effort */
+    }
+    return Response.json({ ok: true, ...result, suggestions, standups, briefing });
   } catch (e) {
     return Response.json(
       { ok: false, error: e instanceof Error ? e.message : "failed" },

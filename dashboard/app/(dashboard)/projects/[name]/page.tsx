@@ -6,6 +6,7 @@ import {
   getRepoTasks,
   getProjectActivity,
   getProjectSuggestions,
+  getRepoReviewers,
 } from "@/lib/db";
 import {
   Card,
@@ -47,7 +48,7 @@ export default async function ProjectDetail({
   const repo = await getProjectByName(decodeURIComponent(name));
   if (!repo) notFound();
 
-  const [pulls, issues, contributors, tasks, activity, suggestions] =
+  const [pulls, issues, contributors, tasks, activity, suggestions, reviewers] =
     await Promise.all([
       getRepoPulls(repo.full_name),
       getRepoIssues(repo.full_name),
@@ -55,6 +56,7 @@ export default async function ProjectDetail({
       getRepoTasks(repo.full_name),
       getProjectActivity(repo.full_name, 84),
       getProjectSuggestions(repo.full_name),
+      getRepoReviewers(repo.full_name, 5),
     ]);
 
   const status = statusOf(repo.pushed_at);
@@ -139,6 +141,42 @@ export default async function ProjectDetail({
           sub={`last active ${relativeTime(repo.pushed_at)}`}
         />
       </div>
+
+      {reviewers.length ? (
+        <div className="mt-8">
+          <SectionHeader
+            title="Suggested reviewers"
+            action={<span>by contribution weight</span>}
+          />
+          <Card className="p-4">
+            <div className="flex flex-wrap gap-2">
+              {reviewers.map((r, i) => (
+                <Link
+                  key={r.handle}
+                  href={`/members/${r.handle}`}
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--color-line-soft)] py-1 pl-1 pr-3 transition-colors hover:bg-[var(--color-accent-soft)]"
+                >
+                  <span className="relative">
+                    <Avatar handle={r.handle} src={r.avatar} size={24} />
+                    {i === 0 ? (
+                      <Star
+                        className="absolute -right-0.5 -top-0.5 size-[10px] fill-[var(--color-accent)] text-[var(--color-accent)]"
+                        strokeWidth={2}
+                      />
+                    ) : null}
+                  </span>
+                  <span className="text-[12.5px] font-medium text-[var(--color-ink-soft)]">
+                    @{r.handle}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-[var(--color-faint)]">
+                    {Math.round(r.share * 100)}%
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

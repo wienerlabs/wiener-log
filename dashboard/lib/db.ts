@@ -979,6 +979,233 @@ export async function deleteObjective(id: number): Promise<void> {
   await sql`DELETE FROM objectives WHERE id = ${id}`;
 }
 
+export interface MentionRow {
+  id: number;
+  actor: string | null;
+  body: string | null;
+  link: string | null;
+  created_at: string;
+}
+export async function getUnreadMentions(
+  handle: string,
+  limit = 8,
+): Promise<MentionRow[]> {
+  return (await sql`
+    SELECT id, actor, body, link, created_at
+    FROM notifications
+    WHERE recipient = ${handle} AND kind = 'mention' AND read = false
+    ORDER BY created_at DESC LIMIT ${limit}
+  `) as MentionRow[];
+}
+
+export interface QuietMember {
+  handle: string;
+  avatar: string | null;
+  last_event: string | null;
+}
+export async function getQuietMembers(
+  days = 3,
+  limit = 8,
+): Promise<QuietMember[]> {
+  const rows = (await sql`
+    SELECT mo.handle, max(mo.avatar_url) AS avatar,
+      (SELECT max(e.ingested_at) FROM events e
+        JOIN workspaces w ON w.id = e.workspace_id
+        WHERE w.slug = mo.handle) AS last_event
+    FROM member_orgs mo GROUP BY mo.handle
+  `) as QuietMember[];
+  const cutoff = Date.now() - days * 86400000;
+  return rows
+    .filter((r) => r.last_event && new Date(r.last_event).getTime() < cutoff)
+    .sort(
+      (a, b) =>
+        new Date(a.last_event as string).getTime() -
+        new Date(b.last_event as string).getTime(),
+    )
+    .slice(0, limit);
+}
+
+export interface MomentumRepo {
+  repo: string;
+  name: string;
+  language: string | null;
+  cur: number;
+  prev: number;
+}
+export async function getProjectMomentum(limit = 8): Promise<MomentumRepo[]> {
+  return (await sql`
+    SELECT r.full_name AS repo, r.name, r.language,
+      coalesce((SELECT count(*)::int FROM events e
+        WHERE e.payload->>'repository' = r.full_name
+          AND e.ingested_at >= now() - interval '7 days'), 0) AS cur,
+      coalesce((SELECT count(*)::int FROM events e
+        WHERE e.payload->>'repository' = r.full_name
+          AND e.ingested_at >= now() - interval '14 days'
+          AND e.ingested_at < now() - interval '7 days'), 0) AS prev
+    FROM gh_repos r WHERE NOT r.is_archived AND NOT r.is_fork
+    ORDER BY cur DESC, prev DESC LIMIT ${limit}
+  `) as MomentumRepo[];
+}
+
+export async function getBriefing(
+  day: string,
+): Promise<{ summary: string; created_at: string } | null> {
+  const rows = (await sql`
+    SELECT summary, created_at FROM briefings WHERE day = ${day} LIMIT 1
+  `) as { summary: string; created_at: string }[];
+  return rows[0] ?? null;
+}
+export async function upsertBriefing(
+  day: string,
+  summary: string,
+): Promise<void> {
+  await sql`
+    INSERT INTO briefings (day, summary) VALUES (${day}, ${summary})
+    ON CONFLICT (day) DO UPDATE SET summary = EXCLUDED.summary, created_at = now()
+  `;
+}
+
+export interface Contributor {
+  handle: string;
+  avatar: string | null;
+  contributions: number;
+  share: number;
+}
+export interface OwnershipRepo {
+  repo: string;
+  name: string;
+  language: string | null;
+  is_private: boolean;
+  total: number;
+  count: number;
+  primary: string;
+  contributors: Contributor[];
+}
+export async function getRepoOwnership(): Promise<OwnershipRepo[]> {
+  const own = (await sql`
+    SELECT c.repo, c.handle, max(mo.avatar_url) AS avatar, count(*)::int AS contributions
+    FROM (
+      SELECT repo, author AS handle FROM gh_pulls WHERE author IS NOT NULL
+      UNION ALL SELECT repo, author AS handle FROM gh_issues WHERE author IS NOT NULL
+      UNION ALL SELECT repo, assignee AS handle FROM gh_issues WHERE assignee IS NOT NULL
+      UNION ALL SELECT e.payload->>'repository' AS repo, w.slug AS handle
+        FROM events e JOIN workspaces w ON w.id = e.workspace_id
+        WHERE e.payload->>'repository' IS NOT NULL
+    ) c
+    JOIN member_orgs mo ON mo.handle = c.handle
+    WHERE c.repo IS NOT NULL
+    GROUP BY c.repo, c.handle
+  `) as {
+    repo: string;
+    handle: string;
+    avatar: string | null;
+    contributions: number;
+  }[];
+  const meta = (await sql`
+    SELECT full_name, name, language, is_private
+    FROM gh_repos WHERE NOT is_archived AND NOT is_fork
+  `) as {
+    full_name: string;
+    name: string;
+    language: string | null;
+    is_private: boolean;
+  }[];
+  const metaMap = new Map(meta.map((m) => [m.full_name, m]));
+  const byRepo = new Map<string, typeof own>();
+  for (const r of own) {
+    if (!metaMap.has(r.repo)) continue;
+    const arr = byRepo.get(r.repo) ?? [];
+    arr.push(r);
+    byRepo.set(r.repo, arr);
+  }
+  const out: OwnershipRepo[] = [];
+  for (const [repo, rows] of byRepo) {
+    const m = metaMap.get(repo) as (typeof meta)[number];
+    const total = rows.reduce((a, r) => a + r.contributions, 0);
+    const contributors = rows
+      .map((r) => ({
+        handle: r.handle,
+        avatar: r.avatar,
+        contributions: r.contributions,
+        share: total > 0 ? r.contributions / total : 0,
+      }))
+      .sort((a, b) => b.contributions - a.contributions);
+    out.push({
+      repo,
+      name: m.name,
+      language: m.language,
+      is_private: m.is_private,
+      total,
+      count: contributors.length,
+      primary: contributors[0]?.handle ?? "",
+      contributors,
+    });
+  }
+  return out.sort((a, b) => b.total - a.total);
+}
+
+export interface ExpertiseRepo {
+  repo: string;
+  name: string;
+  language: string | null;
+  contributions: number;
+}
+export async function getMemberExpertise(
+  handle: string,
+): Promise<{ repos: ExpertiseRepo[]; languages: { language: string; count: number }[] }> {
+  const repos = (await sql`
+    SELECT c.repo, r.name, r.language, count(*)::int AS contributions
+    FROM (
+      SELECT repo, author AS handle FROM gh_pulls WHERE author IS NOT NULL
+      UNION ALL SELECT repo, author AS handle FROM gh_issues WHERE author IS NOT NULL
+      UNION ALL SELECT repo, assignee AS handle FROM gh_issues WHERE assignee IS NOT NULL
+      UNION ALL SELECT e.payload->>'repository' AS repo, w.slug AS handle
+        FROM events e JOIN workspaces w ON w.id = e.workspace_id
+        WHERE e.payload->>'repository' IS NOT NULL
+    ) c
+    JOIN gh_repos r ON r.full_name = c.repo AND NOT r.is_archived AND NOT r.is_fork
+    WHERE c.handle = ${handle}
+    GROUP BY c.repo, r.name, r.language
+    ORDER BY contributions DESC LIMIT 10
+  `) as ExpertiseRepo[];
+  const langMap = new Map<string, number>();
+  for (const r of repos) {
+    if (!r.language) continue;
+    langMap.set(r.language, (langMap.get(r.language) ?? 0) + r.contributions);
+  }
+  const languages = [...langMap.entries()]
+    .map(([language, count]) => ({ language, count }))
+    .sort((a, b) => b.count - a.count);
+  return { repos, languages };
+}
+
+export async function getRepoReviewers(
+  repo: string,
+  limit = 5,
+): Promise<Contributor[]> {
+  const rows = (await sql`
+    SELECT c.handle, max(mo.avatar_url) AS avatar, count(*)::int AS contributions
+    FROM (
+      SELECT repo, author AS handle FROM gh_pulls WHERE author IS NOT NULL
+      UNION ALL SELECT repo, author AS handle FROM gh_issues WHERE author IS NOT NULL
+      UNION ALL SELECT repo, assignee AS handle FROM gh_issues WHERE assignee IS NOT NULL
+      UNION ALL SELECT e.payload->>'repository' AS repo, w.slug AS handle
+        FROM events e JOIN workspaces w ON w.id = e.workspace_id
+        WHERE e.payload->>'repository' IS NOT NULL
+    ) c
+    JOIN member_orgs mo ON mo.handle = c.handle
+    WHERE c.repo = ${repo}
+    GROUP BY c.handle ORDER BY contributions DESC LIMIT ${limit}
+  `) as { handle: string; avatar: string | null; contributions: number }[];
+  const total = rows.reduce((a, r) => a + r.contributions, 0);
+  return rows.map((r) => ({
+    handle: r.handle,
+    avatar: r.avatar,
+    contributions: r.contributions,
+    share: total > 0 ? r.contributions / total : 0,
+  }));
+}
+
 export async function getMemberHeatmap(
   workspace: string,
   weeks = 26,
