@@ -502,6 +502,12 @@ export async function resolveTurn(
     payload?: Record<string, unknown>;
   }[] = [];
 
+  const sinRoll = pool.d20[0] ?? 0;
+  const sinWeaponsAllowed = sinRoll >= 18;
+  if (!sinWeaponsAllowed)
+    for (const e of gm.effects || [])
+      if (e.add_items?.length) e.add_items = e.add_items.filter((id) => !itemById(id)?.sin);
+
   const hadBefore = new Map<string, Set<string>>();
   for (const c of characters)
     hadBefore.set(c.handle, new Set((c.inventory || []).map((i) => i.id)));
@@ -576,6 +582,15 @@ export async function resolveTurn(
     const c = byHandle.get(lt.handle);
     if (!c || !lt.item) continue;
     if (hadBefore.get(lt.handle)?.has(lt.item)) continue;
+    if (itemById(lt.item)?.sin && !sinWeaponsAllowed) {
+      extraTurns.push({
+        kind: "system",
+        actor: lt.handle,
+        content: `${itemNameTr(lt.item)} bir an parıldayıp gölgeye karışır; bir günah silahı bu kadar kolay ele geçmez.`,
+        payload: { warning: true },
+      });
+      continue;
+    }
     if (!grantedItems.get(lt.handle)?.has(lt.item))
       c.inventory = addToInventory(c.inventory, lt.item);
     lootReveals.push({
