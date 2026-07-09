@@ -12,7 +12,7 @@ import { rollPool, rollDie } from "@/lib/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
 import { SIN_LABEL_TR, itemNameTr, itemById, addToInventory, removeFromInventory, stackInventory } from "@/lib/frp/items";
-import { getWorld, saveWorld, addWorldEvent, listWorldEvents } from "@/lib/frp/world";
+import { addWorldEvent, listWorldEvents, driftFactions } from "@/lib/frp/world";
 import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
 import type {
@@ -311,6 +311,24 @@ function stageOf(v: number): number {
   return [25, 50, 75, 100].filter((t) => v >= t).length;
 }
 
+export function xpForLevel(level: number): number {
+  return level * 120;
+}
+
+function levelUps(c: Character): string[] {
+  const notes: string[] = [];
+  while (c.xp >= xpForLevel(c.level)) {
+    c.xp -= xpForLevel(c.level);
+    c.level += 1;
+    c.hp_max += 6;
+    c.mp_max += 3;
+    c.hp_cur = Math.min(c.hp_max, c.hp_cur + 6);
+    c.mp_cur = Math.min(c.mp_max, c.mp_cur + 3);
+    notes.push(`level:${c.level}`);
+  }
+  return notes;
+}
+
 function applyEffect(c: Character, e: Effect): string[] {
   const notes: string[] = [];
   const before: Record<string, number> = {};
@@ -347,15 +365,7 @@ function applyEffect(c: Character, e: Effect): string[] {
     for (const a of e.add_ability) if (!c.abilities.includes(a)) c.abilities.push(a);
   if (e.set_alive !== undefined) c.alive = e.set_alive;
 
-  while (c.xp >= c.level * 120) {
-    c.xp -= c.level * 120;
-    c.level += 1;
-    c.hp_max += 6;
-    c.mp_max += 3;
-    c.hp_cur = Math.min(c.hp_max, c.hp_cur + 6);
-    c.mp_cur = Math.min(c.mp_max, c.mp_cur + 3);
-    notes.push(`level:${c.level}`);
-  }
+  for (const n of levelUps(c)) notes.push(n);
 
   for (const s of SINS) {
     const after = c.corruption[s] || 0;
@@ -429,8 +439,13 @@ export async function resolveTurn(
   if (!campaign) return { ok: false, error: "campaign not found" };
   const characters = await getCharacters(campaignId);
   const recent = await getRecentTurns(campaignId, 16);
-  const world = await getWorld();
-  const worldFeed = await listWorldEvents(6);
+  const world = {
+    doom: campaign.doom,
+    relics: campaign.relics || [],
+    factions: campaign.factions || {},
+    node_control: campaign.node_control || {},
+  };
+  const worldFeed = await listWorldEvents(campaignId, 6);
   const actor = characters.find((c) => c.handle === actorHandle);
   const node = nodeByKey(actor?.location || campaign.position);
   const neighbors = (node?.neighbors || [])
@@ -558,6 +573,12 @@ export async function resolveTurn(
     }
   }
 
+  if (actor && actor.alive && !opts.isOpening) {
+    actor.xp += 8;
+    for (const n of levelUps(actor))
+      extraTurns.push({ kind: "levelup", actor: actor.handle, content: `${actor.name} ${n.split(":")[1]}. seviyeye ulaştı! Can ve mana arttı.` });
+  }
+
   const necros = characters.filter(
     (c) => (c.class === "necromancer" || c.class2 === "necromancer") && c.alive,
   );
@@ -672,7 +693,7 @@ export async function resolveTurn(
     noDash(gm.memory_update || "") ||
     (campaign.state_summary?.memory as string) ||
     "";
-  const doom = clamp(campaign.doom + (gm.doom_delta || 0), 0, 100);
+  let doom = campaign.doom + (gm.doom_delta || 0);
   const quests = Array.isArray(gm.quests)
     ? gm.quests
         .filter((q) => q && q.title)
@@ -691,30 +712,31 @@ export async function resolveTurn(
   const currentLocation = location || campaign.current_location;
 
   const worldEventQueue: { kind: string; text: string; house: string | null }[] = [];
-  const relicSins = new Set(world.relics);
-  let worldDoom = world.doom;
+  const relicSins = new Set(campaign.relics || []);
+  let factions = { ...(campaign.factions || {}) };
+  const nodeControl = { ...(campaign.node_control || {}) };
   const relicIds = [
     ...characters.flatMap((c) => [c.wielded, ...(c.inventory || []).map((i) => i.id)]),
-    ...(gm.loot || []).map((l) => l.item),
+    ...lootReveals.map((l) => l.item),
   ].filter(Boolean) as string[];
   for (const id of relicIds) {
     const s = itemById(id)?.sin;
     if (s && !relicSins.has(s)) {
       relicSins.add(s);
-      worldDoom = clamp(worldDoom + 14, 0, 100);
+      doom += 14;
       worldEventQueue.push({ kind: "relic", text: `Bir günah silahı yüzeye çıktı: ${itemNameTr(id)}.`, house: null });
     }
   }
-  if (gm.world_doom_delta) worldDoom = clamp(worldDoom + Number(gm.world_doom_delta), 0, 100);
+  if (gm.world_doom_delta) doom += Number(gm.world_doom_delta);
   if (gm.faction_delta)
     for (const [k, v] of Object.entries(gm.faction_delta))
-      if (houseById(k)) world.factions[k] = clamp((world.factions[k] ?? 50) + Number(v), 0, 100);
+      if (houseById(k)) factions[k] = clamp((factions[k] ?? 50) + Number(v), 0, 100);
   if (Array.isArray(gm.captures))
     for (const cap of gm.captures.slice(0, 4)) {
       const capNode = resolveNode(cap?.node);
       const h = houseById(cap?.house || "");
-      if (capNode && h && world.node_control[capNode.key] !== cap.house) {
-        world.node_control[capNode.key] = cap.house;
+      if (capNode && h && nodeControl[capNode.key] !== cap.house) {
+        nodeControl[capNode.key] = cap.house;
         worldEventQueue.push({ kind: "capture", text: `${capNode.name}, ${h.name} hanedanının eline geçti.`, house: cap.house });
       }
     }
@@ -726,9 +748,14 @@ export async function resolveTurn(
   if (gm.world_event && String(gm.world_event).trim())
     worldEventQueue.push({ kind: "gm", text: noDash(String(gm.world_event)).slice(0, 160), house: null });
 
-  world.relics = Array.from(relicSins);
-  world.doom = worldDoom;
-  await saveWorld(world);
+  if (!opts.isOpening && (pool.d12[0] ?? 12) <= 4) {
+    const drift = driftFactions(factions, (pool.d20[0] || 1) + (pool.d10[0] || 1) * 20);
+    factions = drift.factions;
+    if (drift.news) worldEventQueue.push({ kind: "war", text: drift.news.text, house: drift.news.house });
+  }
+
+  doom = clamp(doom, 0, 100);
+  const relics = Array.from(relicSins);
   for (const ev of worldEventQueue.slice(0, 4))
     await addWorldEvent(campaignId, ev.kind, ev.text.slice(0, 160), ev.house);
 
@@ -752,6 +779,9 @@ export async function resolveTurn(
     current_location: currentLocation,
     position,
     discovered,
+    relics,
+    factions,
+    node_control: nodeControl,
   });
 
   if (next && next !== actorHandle) {

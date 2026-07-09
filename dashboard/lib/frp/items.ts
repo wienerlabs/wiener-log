@@ -351,6 +351,22 @@ export const FORGE_STOCK: string[] = [
   "shield",
 ];
 
+export interface UseEffect {
+  hp?: number;
+  mp?: number;
+  label: string;
+}
+
+export const USE_EFFECTS: Record<string, UseEffect> = {
+  potion_health: { hp: 20, label: "içti" },
+  potion_mana: { mp: 18, label: "içti" },
+  bread: { hp: 5, label: "yedi" },
+};
+
+export function isConsumable(id: string): boolean {
+  return id in USE_EFFECTS;
+}
+
 export interface ForgeUpgrade {
   from: string;
   to: string;

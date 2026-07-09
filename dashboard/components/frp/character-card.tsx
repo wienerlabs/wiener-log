@@ -5,6 +5,7 @@ import {
   itemDescTr,
   coinBreakdown,
   stackInventory,
+  isConsumable,
   RARITY_COLOR,
   RARITY_TR,
   SIN_COLOR,
@@ -31,11 +32,13 @@ export function CharacterCard({
   isTurn = false,
   compact = false,
   onWield,
+  onUse,
 }: {
   character: Character;
   isTurn?: boolean;
   compact?: boolean;
   onWield?: (item: string) => void;
+  onUse?: (item: string) => void;
 }) {
   const dom = dominantSin(c);
   const dead = !c.alive;
@@ -90,8 +93,9 @@ export function CharacterCard({
             </div>
           ) : null}
           <div className="mt-2 space-y-1.5">
-            <BarRow label="CAN" value={c.hp_cur} max={c.hp_max} color="var(--frp-hp)" compact={compact} />
-            <BarRow label="MANA" value={c.mp_cur} max={c.mp_max} color="var(--frp-mp)" compact={compact} />
+            <BarRow label="Can" value={c.hp_cur} max={c.hp_max} color="var(--frp-hp)" compact={compact} />
+            <BarRow label="Mana" value={c.mp_cur} max={c.mp_max} color="var(--frp-mp)" compact={compact} />
+            <BarRow label="Xp" value={c.xp} max={c.level * 120} color="var(--frp-accent)" compact={compact} />
             {dom ? (
               <div className="flex items-center gap-2">
                 <span className="w-8 shrink-0"><SinSigil sin={dom.sin} size={13} /></span>
@@ -131,8 +135,16 @@ export function CharacterCard({
               const isWeapon = item?.category === "weapon";
               const isWielded = c.wielded === it.id;
               const clickable = !!onWield && isWeapon;
+              const usable = !!onUse && isConsumable(it.id);
+              const hint = clickable
+                ? isWielded
+                  ? "\nKuşanılan silah (bırakmak için tıkla)"
+                  : "\nSaldırı silahı olarak seç (tıkla)"
+                : usable
+                  ? "\nÇift tıkla: kullan"
+                  : "";
               const title = item
-                ? `${itemNameTr(it.id)}${qty > 1 ? ` ×${qty}` : ""} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}${clickable ? (isWielded ? "\nKuşanılan silah (bırakmak için tıkla)" : "\nSaldırı silahı olarak seç") : ""}`
+                ? `${itemNameTr(it.id)}${qty > 1 ? ` ×${qty}` : ""} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}${hint}`
                 : it.id;
               const inner = item ? (
                 <PixelSprite name={item.sprite} cell={2} glow={item.rarity === "legendary" ? color : undefined} />
@@ -153,19 +165,35 @@ export function CharacterCard({
                 border: `1.5px solid ${isWielded ? "var(--frp-accent)" : color}`,
                 boxShadow: isWielded ? "0 0 0 1px var(--frp-accent)" : undefined,
               };
-              return clickable ? (
-                <button
-                  key={`${it.id}-${i}`}
-                  type="button"
-                  title={title}
-                  onClick={() => onWield!(it.id)}
-                  className="relative flex size-9 items-center justify-center rounded-[7px] transition-colors"
-                  style={style}
-                >
-                  {inner}
-                  {badge}
-                </button>
-              ) : (
+              if (clickable)
+                return (
+                  <button
+                    key={`${it.id}-${i}`}
+                    type="button"
+                    title={title}
+                    onClick={() => onWield!(it.id)}
+                    className="relative flex size-9 items-center justify-center rounded-[7px] transition-colors"
+                    style={style}
+                  >
+                    {inner}
+                    {badge}
+                  </button>
+                );
+              if (usable)
+                return (
+                  <button
+                    key={`${it.id}-${i}`}
+                    type="button"
+                    title={title}
+                    onDoubleClick={() => onUse!(it.id)}
+                    className="relative flex size-9 items-center justify-center rounded-[7px] transition-colors"
+                    style={style}
+                  >
+                    {inner}
+                    {badge}
+                  </button>
+                );
+              return (
                 <div
                   key={`${it.id}-${i}`}
                   title={title}

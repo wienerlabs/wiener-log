@@ -6,8 +6,10 @@ import {
   appendTurn,
   updateCampaign,
   restartCampaign,
+  lastActionText,
 } from "@/lib/frp/db";
 import { resolveTurn } from "@/lib/frp/engine";
+import { deleteWorldEvents } from "@/lib/frp/world";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import type { Campaign } from "@/lib/frp/types";
@@ -34,6 +36,9 @@ function fields(c: Campaign, o: Partial<Campaign> = {}) {
     current_location: o.current_location !== undefined ? o.current_location : c.current_location,
     position: o.position !== undefined ? o.position : c.position,
     discovered: o.discovered ?? c.discovered,
+    relics: o.relics ?? c.relics,
+    factions: o.factions ?? c.factions,
+    node_control: o.node_control ?? c.node_control,
   };
 }
 
@@ -116,8 +121,12 @@ export async function POST(
       return Response.json({ ok: true });
     }
     if (body.control === "end") {
-      await updateCampaign(campaignId, fields(campaign, { status: "ended" }));
-      await appendTurn(campaignId, "system", "system", "Efsane burada sona erdi.", null, campaign.round);
+      await updateCampaign(
+        campaignId,
+        fields(campaign, { status: "ended", doom: 0, relics: [], factions: {}, node_control: {} }),
+      );
+      await deleteWorldEvents(campaignId);
+      await appendTurn(campaignId, "system", "system", "Efsane burada sona erdi. Bu evren sıfırlandı.", null, campaign.round);
       return Response.json({ ok: true });
     }
     if (body.control === "restart") {
@@ -164,6 +173,13 @@ export async function POST(
   const ch = await getCharacter(campaignId, handle);
   if (!ch || !ch.alive)
     return Response.json({ error: "no living character" }, { status: 400 });
+
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const prevAction = await lastActionText(campaignId, handle);
+  if (prevAction && norm(prevAction) === norm(text)) {
+    await appendTurn(campaignId, "gm", "system", "Aynı eylemi ard arda tekrarlayamazsın; farklı bir şey dene.", { warning: true }, campaign.round);
+    return Response.json({ ok: false, error: "duplicate action" });
+  }
 
   await appendTurn(campaignId, handle, "action", text, null, campaign.round);
   const r = await resolveTurn(campaignId, handle, text);

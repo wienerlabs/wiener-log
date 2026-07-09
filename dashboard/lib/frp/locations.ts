@@ -20,6 +20,13 @@ export const LOCATIONS: LocationDef[] = [
   { key: "blacksmith", tr: "Demirci", en: "the blacksmith", hint: "a blacksmith's forge and anvil" },
   { key: "market_square", tr: "Pazar Meydanı", en: "the market square", hint: "a busy market square of tents and stalls" },
   { key: "watchtower", tr: "Gözcü Kulesi", en: "a watchtower", hint: "a lone stone watchtower on a hill" },
+  {
+    key: "kanli_tac_ordu",
+    tr: "Kanlı Taç Ordusu Sefere Çıkıyor",
+    en: "the Blood Crown army marching to war",
+    hint: "a vast army under blood-red banners crowned in gold, a mounted king leading it out from the capital toward another house's lands for war",
+    big: true,
+  },
 ];
 
 export function locationByKey(k: string): LocationDef | undefined {

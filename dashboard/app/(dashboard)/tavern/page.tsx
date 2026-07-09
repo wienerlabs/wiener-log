@@ -1,9 +1,7 @@
 import { getSession } from "@/lib/session";
 import { listCampaigns } from "@/lib/frp/db";
-import { getWorld, listWorldEvents } from "@/lib/frp/world";
 import { Card, PageHeader, SectionHeader, EmptyState } from "@/components/ui";
 import { CreateCampaign } from "@/components/frp/create-campaign";
-import { LivingWorld } from "@/components/frp/living-world";
 import { Users, Check, Swords } from "lucide-react";
 import Link from "next/link";
 
@@ -29,11 +27,7 @@ const DIFF: Record<string, string> = {
 export default async function TavernPage() {
   const session = await getSession();
   const handle = session ? me(session) : "";
-  const [campaigns, world, events] = await Promise.all([
-    listCampaigns(handle),
-    getWorld(),
-    listWorldEvents(8),
-  ]);
+  const campaigns = await listCampaigns(handle);
 
   return (
     <div className="rise">
@@ -41,9 +35,6 @@ export default async function TavernPage() {
         title="Meyhane"
         subtitle="Bir takım topla, bir Anlatıcı uyandır ve yaşayan bir dünyaya adım at."
       />
-      <div className="mb-6">
-        <LivingWorld world={world} events={events} />
-      </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div>
           <SectionHeader title="Açık efsaneler" action={<span>{campaigns.length}</span>} />

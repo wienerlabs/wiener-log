@@ -1,6 +1,5 @@
 import { getSession } from "@/lib/session";
 import { getCampaign, getCharacter, saveCharacter, appendTurn } from "@/lib/frp/db";
-import { getWorld } from "@/lib/frp/world";
 import {
   itemPrice,
   sellPrice,
@@ -57,8 +56,7 @@ export async function POST(
     return Response.json({ error: "burada alışveriş yok" }, { status: 400 });
 
   const body = (await req.json()) as { op?: string; item?: string; from?: string };
-  const world = await getWorld();
-  const doom = world.doom;
+  const doom = campaign.doom;
 
   if (body.op === "buy") {
     const item = String(body.item || "");

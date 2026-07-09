@@ -97,6 +97,9 @@ export interface Campaign {
   current_location: string | null;
   position: string | null;
   discovered: string[];
+  relics: Sin[];
+  factions: Record<string, number>;
+  node_control: Record<string, string>;
   created_at: string;
   updated_at: string;
 }

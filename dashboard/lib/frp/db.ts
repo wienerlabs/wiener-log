@@ -54,6 +54,7 @@ export async function getCampaign(id: number): Promise<Campaign | null> {
     SELECT id, title, setting, tone, status, host, gm_model, difficulty,
       current_scene, state_summary, turn_order, current_turn, round, encounter,
       doom, quests, reputation, current_location, position, discovered,
+      relics, factions, node_control,
       created_at, updated_at
     FROM campaigns WHERE id = ${id} LIMIT 1
   `) as Campaign[];
@@ -76,6 +77,9 @@ export async function updateCampaign(
     current_location?: string | null;
     position?: string | null;
     discovered?: string[];
+    relics?: unknown[];
+    factions?: Record<string, number>;
+    node_control?: Record<string, string>;
   },
 ): Promise<void> {
   await sql`
@@ -93,6 +97,9 @@ export async function updateCampaign(
       current_location = ${fields.current_location ?? null},
       position = ${fields.position ?? START_NODE},
       discovered = ${JSON.stringify(fields.discovered ?? [START_NODE])}::jsonb,
+      relics = ${JSON.stringify(fields.relics ?? [])}::jsonb,
+      factions = ${JSON.stringify(fields.factions ?? {})}::jsonb,
+      node_control = ${JSON.stringify(fields.node_control ?? {})}::jsonb,
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -197,8 +204,21 @@ export async function getRecentTurns(
   return rows.reverse();
 }
 
+export async function lastActionText(
+  campaignId: number,
+  actor: string,
+): Promise<string | null> {
+  const rows = (await sql`
+    SELECT content FROM campaign_turns
+    WHERE campaign_id = ${campaignId} AND actor = ${actor} AND kind = 'action'
+    ORDER BY id DESC LIMIT 1
+  `) as { content: string | null }[];
+  return rows[0]?.content ?? null;
+}
+
 export async function restartCampaign(campaignId: number): Promise<void> {
   await sql`DELETE FROM campaign_turns WHERE campaign_id = ${campaignId}`;
+  await sql`DELETE FROM frp_world_events WHERE campaign_id = ${campaignId}`;
   await sql`
     UPDATE characters SET
       hp_cur = hp_max, mp_cur = mp_max, armor = 0,
@@ -214,6 +234,7 @@ export async function restartCampaign(campaignId: number): Promise<void> {
       round = 0, encounter = null,
       doom = 0, quests = '[]'::jsonb, reputation = '{}'::jsonb, current_location = null,
       position = ${START_NODE}, discovered = ${JSON.stringify([START_NODE])}::jsonb,
+      relics = '[]'::jsonb, factions = '{}'::jsonb, node_control = '{}'::jsonb,
       updated_at = now()
     WHERE id = ${campaignId}
   `;

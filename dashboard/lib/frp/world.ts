@@ -1,42 +1,6 @@
 import { sql } from "@/lib/db";
-import type { WorldState, WorldEvent, Sin } from "@/lib/frp/types";
-
-const DEFAULT_WORLD: WorldState = {
-  doom: 0,
-  factions: {},
-  relics: [],
-  node_control: {},
-};
-
-export async function getWorld(): Promise<WorldState> {
-  const rows = (await sql`
-    SELECT doom, factions, relics, node_control, updated_at
-    FROM frp_world WHERE id = 1 LIMIT 1
-  `) as WorldState[];
-  const w = rows[0];
-  if (!w) return { ...DEFAULT_WORLD };
-  return {
-    doom: w.doom ?? 0,
-    factions: w.factions || {},
-    relics: Array.isArray(w.relics) ? w.relics : [],
-    node_control: w.node_control || {},
-    updated_at: w.updated_at,
-  };
-}
-
-export async function saveWorld(w: WorldState): Promise<void> {
-  await sql`
-    INSERT INTO frp_world (id, doom, factions, relics, node_control, updated_at)
-    VALUES (1, ${w.doom}, ${JSON.stringify(w.factions)}::jsonb,
-      ${JSON.stringify(w.relics)}::jsonb, ${JSON.stringify(w.node_control)}::jsonb, now())
-    ON CONFLICT (id) DO UPDATE SET
-      doom = ${w.doom},
-      factions = ${JSON.stringify(w.factions)}::jsonb,
-      relics = ${JSON.stringify(w.relics)}::jsonb,
-      node_control = ${JSON.stringify(w.node_control)}::jsonb,
-      updated_at = now()
-  `;
-}
+import { HOUSES } from "@/lib/frp/houses";
+import type { WorldEvent, Sin } from "@/lib/frp/types";
 
 export async function addWorldEvent(
   campaignId: number | null,
@@ -50,18 +14,47 @@ export async function addWorldEvent(
   `;
 }
 
-export async function listWorldEvents(limit = 8): Promise<WorldEvent[]> {
+export async function listWorldEvents(
+  campaignId: number,
+  limit = 8,
+): Promise<WorldEvent[]> {
   return (await sql`
     SELECT id, campaign_id, kind, text, house, created_at
-    FROM frp_world_events ORDER BY id DESC LIMIT ${limit}
+    FROM frp_world_events
+    WHERE campaign_id = ${campaignId}
+    ORDER BY id DESC LIMIT ${limit}
   `) as WorldEvent[];
 }
 
-export function factionControl(w: WorldState, houseId: string): number {
-  const v = w.factions[houseId];
+export async function deleteWorldEvents(campaignId: number): Promise<void> {
+  await sql`DELETE FROM frp_world_events WHERE campaign_id = ${campaignId}`;
+}
+
+export function factionControl(
+  factions: Record<string, number>,
+  houseId: string,
+): number {
+  const v = factions?.[houseId];
   return typeof v === "number" ? v : 50;
 }
 
-export function relicSet(w: WorldState): Set<Sin> {
-  return new Set(w.relics);
+export function relicSet(relics: Sin[]): Set<Sin> {
+  return new Set(relics || []);
+}
+
+export function driftFactions(
+  factions: Record<string, number>,
+  seed: number,
+): { factions: Record<string, number>; news: { text: string; house: string } | null } {
+  const f: Record<string, number> = {};
+  for (const h of HOUSES) f[h.id] = factionControl(factions, h.id);
+  const gain = HOUSES[seed % HOUSES.length];
+  const lose = HOUSES[(Math.floor(seed / 7) + 1) % HOUSES.length];
+  if (gain.id === lose.id) return { factions: f, news: null };
+  f[gain.id] = Math.min(100, f[gain.id] + 3);
+  f[lose.id] = Math.max(0, f[lose.id] - 3);
+  return {
+    factions: f,
+    news: { text: `${gain.name} orduları ${lose.name}'in sınırından toprak kopardı.`, house: gain.id },
+  };
 }

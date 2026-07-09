@@ -9,7 +9,7 @@ import { FireOverlay } from "@/components/frp/fire-overlay";
 import { WorldHud } from "@/components/frp/world-hud";
 import { ShopPanel } from "@/components/frp/shop-panel";
 import { itemNameTr } from "@/lib/frp/items";
-import type { Campaign, Character, Turn, WorldState } from "@/lib/frp/types";
+import type { Campaign, Character, Turn, WorldState, WorldEvent } from "@/lib/frp/types";
 import {
   SendHorizontal,
   Play,
@@ -26,6 +26,7 @@ export function GameView({
   initialCharacters,
   initialTurns,
   initialWorld,
+  initialEvents,
   me,
   isHost,
   joined,
@@ -35,6 +36,7 @@ export function GameView({
   initialCharacters: Character[];
   initialTurns: Turn[];
   initialWorld: WorldState;
+  initialEvents: WorldEvent[];
   me: string;
   isHost: boolean;
   joined: boolean;
@@ -43,6 +45,7 @@ export function GameView({
   const [characters, setCharacters] = useState(initialCharacters);
   const [turns, setTurns] = useState(initialTurns);
   const [world, setWorld] = useState(initialWorld);
+  const [events, setEvents] = useState(initialEvents);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"action" | "talk">("talk");
   const [sending, setSending] = useState(false);
@@ -72,10 +75,12 @@ export function GameView({
         characters: Character[];
         turns: Turn[];
         world?: WorldState;
+        events?: WorldEvent[];
       };
       setCampaign(d.campaign);
       setCharacters(d.characters);
       if (d.world) setWorld(d.world);
+      if (d.events) setEvents(d.events);
       if (d.turns.length) {
         let added = false;
         setTurns((prev) => {
@@ -131,6 +136,19 @@ export function GameView({
   const wield = async (item: string) => {
     try {
       await fetch(`/api/frp/${id}/wield`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ item }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const use = async (item: string) => {
+    try {
+      await fetch(`/api/frp/${id}/use`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ item }),
@@ -382,6 +400,7 @@ export function GameView({
           <WorldHud
             campaign={campaign}
             world={world}
+            events={events}
             myLocation={myChar?.location ?? null}
             canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
             onTravel={travel}
@@ -397,6 +416,7 @@ export function GameView({
             character={myChar}
             isTurn={campaign.current_turn === me}
             onWield={myChar.alive ? wield : undefined}
+            onUse={myChar.alive ? use : undefined}
           />
         ) : null}
         {characters

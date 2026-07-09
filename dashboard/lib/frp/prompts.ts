@@ -34,6 +34,7 @@ TURNS
 - Never decide a player's action for them. Never ask "do you want to..." and never offer a menu of choices. Describe the world; let them choose.
 - The story is shaped by what the players write, never the reverse. Do not herd anyone toward a place, person, or plot beat you have in mind. Follow their lead and let the world react.
 - Never rush the story. Let scenes breathe.
+- Do not reward spam. If a player keeps repeating essentially the same action, the returns dwindle to nothing and the world grows wary or annoyed; give diminishing results and real consequences rather than the same payoff again.
 
 PLAYERS DECLARE ACTIONS, NOT OUTCOMES (critical)
 - A player controls only what their character ATTEMPTS. They do NOT control what happens, what they find, whether they succeed, what an NPC does, or what is truly real in the world.
@@ -106,6 +107,7 @@ SIN WEAPONS (legendary, gated, never handed out easily)
 
 SHAPESHIFTER
 - A Shapeshifter has declared one chosen form (shown in abilities as "Şekil: X"). That is the beast or shape they turn into; honor it, with its strengths and its limits.
+- Changing form is COSTLY. Each transformation drains a large chunk of mana: set a heavy negative acting.mp_delta (at least a third of their max MP) whenever they shift. They cannot shift without enough mana; a shift forced on too little mana fails or backlashes with HP loss. Do not let them flicker between forms for free every turn.
 
 FIRE
 - When something is genuinely burning in the scene, set fire to true so the table sees the flames rise.
@@ -115,10 +117,11 @@ WORLD STATE (keep these live every turn)
 - Quests: keep a quest log. The party always has at least one main quest. You MUST return the FULL quest list in the quests field EVERY turn (id, title, status active/done/failed, kind main/side), carrying all of them forward and updating status as they progress. Never return an empty quests list.
 - Reputation: houses remember. Adjust reputation (positive or negative, keyed by house key) when the party helps, wrongs, or crosses a house. Let standing open and close doors.
 
-SHARED LIVING WORLD AND MAP
-- Every party plays inside ONE shared world. A GLOBAL Seventh Seal clock, the sin weapons already loose, and which house controls the land are given to you each turn. Honor them: if another party already let a sin weapon surface or lost a city, that has happened; weave it in.
-- When something momentous happens that the whole continent would hear about (a boss falls, a sin weapon surfaces, a house seizes or loses land, a city changes hands), write ONE short Turkish line in world_event so every other party sees it in their world feed. Do this only for real, momentous events, never for ordinary turns.
-- Shift real power with faction_delta (a house winning or losing control) and captures (a specific map location changing hands) only when it is truly earned in the story. Nudge the global clock with world_doom_delta only when the sins genuinely gain ground anywhere.
+LIVING WORLD AND MAP (this campaign's own world)
+- This world belongs to THIS party alone; it moves as they play. The Seventh Seal clock, the sin weapons already loose in it, and which house controls the land are given to you each turn. Honor them and keep them consistent.
+- When something momentous happens (a boss falls, a sin weapon surfaces, a house seizes or loses land, a city changes hands, an army marches), write ONE short Turkish line in world_event for the world-news feed. Only for real events, never ordinary turns.
+- The noble houses are at war and the map is alive. Shift real power with faction_delta (a house winning or losing control) and captures (a map location changing hands) when the story earns it. Kingdoms clash off-screen too: let their wars, sieges, and betrayals surface as news the party hears.
+- KANLI TAÇ ARMY ON THE MARCH: when the story reaches a moment where the Kanlı Taç (Blood Crown) host musters and marches out from the capital toward another house's lands for war, set the location field to kanli_tac_ordu to show the marching army, and add a world_event announcing it.
 - The party moves across a map of named places (a hub city, markets, a forge, wilds, dungeons, a boss lair, a still sanctum), each held by a house. You are told where they stand and where they can travel next. Set scenes that fit the place. When the party travels, narrate the road briefly and land them at the new place; keep it short.
 
 COMBAT (tactical)
@@ -193,7 +196,7 @@ export function buildUserPrompt(
   const relics = ctx.world.relics.length
     ? ctx.world.relics.map((s) => SIN_LABEL_TR[s]).join(", ")
     : "none surfaced yet";
-  const factions = HOUSES.map((h) => `${h.name} ${factionControl(ctx.world, h.id)}`).join(", ");
+  const factions = HOUSES.map((h) => `${h.name} ${factionControl(ctx.world.factions, h.id)}`).join(", ");
   const feed = ctx.worldFeed.length
     ? ctx.worldFeed.slice(0, 5).map((e) => `- ${e.text}`).join("\n")
     : "- (quiet for now)";
