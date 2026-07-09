@@ -186,6 +186,35 @@ export function itemNameTr(id: string): string {
   return ITEM_NAME_TR[id] || ITEM_CATALOG[id]?.name || id;
 }
 
+const ITEM_DESC_TR: Record<string, string> = {
+  sword: "Dürüst çelik. Yakın dövüşte güvenilir hasar.",
+  dagger: "Sessiz ve hızlı. Gizli saldırılarda üstün.",
+  bow: "Uzaktan isabetli atış. Menzil avantajı sağlar.",
+  staff: "Büyü kanalı. Büyü gücünü artırır.",
+  shield: "Gelen darbeleri savuşturur. Savunmayı yükseltir.",
+  leather_armor: "Hafif koruma. Hareketi kısıtlamaz.",
+  potion_health: "Yaraları kapatır, canı geri verir.",
+  potion_mana: "Zihnin ardındaki kuyuyu doldurur, manayı yeniler.",
+  scroll: "Tek seferlik bir büyü ya da sır taşır.",
+  torch: "Karanlığı bir kol boyu uzakta tutar.",
+  key: "Bir kilidi veya bir sırrı açar.",
+  bread: "Bayat ama doyurucu. Yolda güç verir.",
+  ring: "Sıcak dokunuşlu gümüş bir yüzük. Gizli bir güç barındırır.",
+  gem: "Geri bakan kızıl bir taş. Değeri ve tehlikesi büyük.",
+  gold_pouch: "İnsanı değiştirecek ağırlıkta altın.",
+  sin_pride: "İki elli kılıç. Kullanıcı kendini ne kadar üstün görürse o kadar keskinleşir. Kibir yozlaştırır.",
+  sin_greed: "Zincirli tırpan. Kurbanının en değerli özelliğini çalar. Açgözlülük yozlaştırır.",
+  sin_lust: "İkiz hançer. Dokunduğu herkesin iradesini zayıflatır. Şehvet yozlaştırır.",
+  sin_envy: "Uzun yay. Karşısındakinin en güçlü yeteneğini kopyalar. Haset yozlaştırır.",
+  sin_gluttony: "Devasa balta. Öldürdüğü her şeyi yutarak büyür. Oburluk yozlaştırır.",
+  sin_wrath: "Savaş eldivenleri. Aldığı her yarayla güçlenir. Öfke yozlaştırır.",
+  sin_sloth: "Zamanı yavaşlatan asa. Nihai gücü Sessiz Dünya. Tembellik yozlaştırır.",
+};
+
+export function itemDescTr(id: string): string {
+  return ITEM_DESC_TR[id] || ITEM_CATALOG[id]?.desc || "";
+}
+
 export const RARITY_TR: Record<Rarity, string> = {
   common: "sıradan",
   uncommon: "az bulunur",

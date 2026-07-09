@@ -61,7 +61,7 @@ function TurnBlock({
     return (
       <div className="flex items-start gap-2.5 pl-1">
         <div className="mt-0.5 shrink-0 rounded-[7px] p-0.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
-          {actor ? <PixelPortrait seed={actor.portrait_seed} cell={3} /> : <div className="size-9" />}
+          {actor ? <PixelPortrait seed={actor.portrait_seed} race={actor.race} cell={3} /> : <div className="size-9" />}
         </div>
         <div className="min-w-0 flex-1">
           <span className="text-[13px] font-semibold" style={{ color: "var(--frp-ink)" }}>

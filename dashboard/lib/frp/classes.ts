@@ -79,6 +79,39 @@ export const CLASSES: ClassDef[] = [
     items: ["staff", "gem", "potion_mana", "ring"],
     ability: "Hex",
   },
+  {
+    id: "assassin",
+    name: "Assassin",
+    blurb: "A debt collector for the grave. Never seen, only felt.",
+    sprite: "cls_assassin",
+    hp: 22,
+    mp: 10,
+    stats: { str: 10, dex: 17, con: 11, int: 11, wis: 10, cha: 12 },
+    items: ["dagger", "dagger", "potion_health", "key"],
+    ability: "Shadow Strike",
+  },
+  {
+    id: "tamer",
+    name: "Shapeshifter",
+    blurb: "Wears other shapes and speaks the tongue of beasts.",
+    sprite: "cls_tamer",
+    hp: 26,
+    mp: 16,
+    stats: { str: 11, dex: 12, con: 13, int: 13, wis: 15, cha: 11 },
+    items: ["staff", "dagger", "potion_health", "bread"],
+    ability: "Summon Beast",
+  },
+  {
+    id: "necromancer",
+    name: "Necromancer",
+    blurb: "Death is not an ending here, only a change of employer.",
+    sprite: "cls_necromancer",
+    hp: 20,
+    mp: 22,
+    stats: { str: 8, dex: 10, con: 11, int: 16, wis: 13, cha: 13 },
+    items: ["staff", "gem", "scroll", "ring"],
+    ability: "Raise Dead",
+  },
 ];
 
 export interface RaceDef {
@@ -95,6 +128,7 @@ export const RACES: RaceDef[] = [
   { id: "orc", name: "Orc", blurb: "Feared first, understood rarely.", mods: { str: 2 } },
   { id: "elf", name: "Elf", blurb: "Long memory, longer patience.", mods: { dex: 1, int: 1 } },
   { id: "tiefling", name: "Tiefling", blurb: "Born marked, already half-accused.", mods: { int: 1, cha: 1 } },
+  { id: "goblin", name: "Goblin", blurb: "Small, sharp, and underestimated to the last.", mods: { dex: 2 } },
 ];
 
 export function classById(id: string): ClassDef | undefined {
@@ -111,6 +145,9 @@ export const CLASS_TR: Record<string, { name: string; blurb: string; ability: st
   ranger: { name: "Avcı", blurb: "Vahşi doğayı bir kol boyu uzakta tutar, oku hep gergin.", ability: "Nişanlı Atış" },
   cleric: { name: "Rahip", blurb: "Sönmekte olan bir ışığı, onu yutan yerlere taşır.", ability: "Yara Sarma" },
   warlock: { name: "Efsuncu", blurb: "Karanlıkta bir pazarlık yaptı. Karanlık makbuzu saklıyor.", ability: "Lanet" },
+  assassin: { name: "Suikastçı", blurb: "Mezarın tahsildarı. Görülmez, yalnızca hissedilir.", ability: "Gölge Darbesi" },
+  tamer: { name: "Şekil Değiştiren", blurb: "Başka bedenlere bürünür, canavarların dilini konuşur.", ability: "Canavar Çağır" },
+  necromancer: { name: "Nekromant", blurb: "Ölüm burada bir son değil, sadece patron değiştirmektir.", ability: "Ölüyü Dirilt" },
 };
 
 export const RACE_TR: Record<string, { name: string; blurb: string }> = {
@@ -120,4 +157,5 @@ export const RACE_TR: Record<string, { name: string; blurb: string }> = {
   orc: { name: "Ork", blurb: "Önce korkulur, nadiren anlaşılır." },
   elf: { name: "Elf", blurb: "Uzun hafıza, daha uzun sabır." },
   tiefling: { name: "Tiefling", blurb: "Damgalı doğar, yarı-suçlanmış." },
+  goblin: { name: "Goblin", blurb: "Küçük, sivri ve hep hafife alınan." },
 };

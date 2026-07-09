@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLASSES, RACES, CLASS_TR, RACE_TR } from "@/lib/frp/classes";
 import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
@@ -9,17 +9,34 @@ import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 const TRAITS = ["Cesur", "Kurnaz", "Bilge", "Acımasız", "Sadık", "Karanlık"];
 const STEPS = ["İsim", "Sınıf", "Irk", "Tabiat"];
 
-export function JoinPanel({ id }: { id: number }) {
+export function JoinPanel({
+  id,
+  difficulty = "normal",
+}: {
+  id: number;
+  difficulty?: string;
+}) {
   const router = useRouter();
+  const dualAllowed = difficulty === "easy" || difficulty === "normal";
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [cls, setCls] = useState(CLASSES[0].id);
+  const [cls2, setCls2] = useState<string | null>(null);
   const [race, setRace] = useState(RACES[0].id);
   const [trait, setTrait] = useState(TRAITS[0]);
   const [busy, setBusy] = useState(false);
+  const [seed, setSeed] = useState("kahraman:warrior:human");
 
-  const seed = `${name || "kahraman"}:${cls}:${race}`;
+  useEffect(() => {
+    const to = setTimeout(
+      () => setSeed(`${name || "kahraman"}:${cls}:${race}`),
+      160,
+    );
+    return () => clearTimeout(to);
+  }, [name, cls, race]);
+
   const clsTr = CLASS_TR[cls];
+  const cls2Tr = cls2 ? CLASS_TR[cls2] : null;
 
   const join = async () => {
     if (busy) return;
@@ -28,7 +45,7 @@ export function JoinPanel({ id }: { id: number }) {
       const res = await fetch(`/api/frp/${id}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, cls, race, trait }),
+        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait }),
       });
       if (res.ok) router.refresh();
       else setBusy(false);
@@ -37,34 +54,39 @@ export function JoinPanel({ id }: { id: number }) {
     }
   };
 
+  const pickPrimary = (cid: string) => {
+    setCls(cid);
+    if (cls2 === cid) setCls2(null);
+  };
+
   return (
     <div className="rounded-[16px] p-5" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
       <div className="mb-5 flex items-center gap-3">
         <div className="rounded-[12px] p-1.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
-          <PixelPortrait seed={seed} cell={8} />
+          <PixelPortrait seed={seed} race={race} cell={8} />
         </div>
         <div>
           <div className="text-[16px] font-semibold" style={{ color: "var(--frp-ink)" }}>
             {name || "Yeni bir kahraman"}
           </div>
           <div className="text-[12px]" style={{ color: "var(--frp-muted)" }}>
-            {RACE_TR[race]?.name} {clsTr?.name} · {trait}
+            {RACE_TR[race]?.name} {clsTr?.name}
+            {cls2Tr ? ` / ${cls2Tr.name}` : ""} · {trait}
           </div>
         </div>
       </div>
 
       <div className="mb-4 flex items-center gap-1.5">
         {STEPS.map((s, i) => (
-          <div key={s} className="flex flex-1 items-center gap-1.5">
-            <div
-              className="flex h-6 flex-1 items-center justify-center rounded-full text-[10.5px] font-semibold transition-colors"
-              style={{
-                background: i === step ? "var(--frp-accent)" : i < step ? "var(--frp-accent-soft)" : "var(--frp-line-soft)",
-                color: i === step ? "#fff" : i < step ? "var(--frp-accent-ink)" : "var(--frp-faint)",
-              }}
-            >
-              {s}
-            </div>
+          <div
+            key={s}
+            className="flex h-6 flex-1 items-center justify-center rounded-full text-[10.5px] font-semibold transition-colors"
+            style={{
+              background: i === step ? "var(--frp-accent)" : i < step ? "var(--frp-accent-soft)" : "var(--frp-line-soft)",
+              color: i === step ? "#fff" : i < step ? "var(--frp-accent-ink)" : "var(--frp-faint)",
+            }}
+          >
+            {s}
           </div>
         ))}
       </div>
@@ -78,34 +100,72 @@ export function JoinPanel({ id }: { id: number }) {
             autoFocus
             placeholder="Örn. Kael Alacakaranlık"
             className="w-full rounded-[11px] px-3.5 py-2.5 text-[14px] outline-none"
-            style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)", color: "var(--frp-ink)" }}
+            style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)", color: "var(--frp-ink)" }}
           />
         </div>
       ) : null}
 
       {step === 1 ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {CLASSES.map((c) => {
-            const tr = CLASS_TR[c.id];
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCls(c.id)}
-                className="rounded-[12px] border p-3 text-left transition-colors"
-                style={{
-                  borderColor: cls === c.id ? "var(--frp-accent)" : "var(--frp-line)",
-                  background: cls === c.id ? "var(--frp-accent-soft)" : "var(--frp-surface)",
-                }}
-              >
-                <div className="text-[13.5px] font-semibold" style={{ color: "var(--frp-ink)" }}>{tr?.name}</div>
-                <div className="mt-0.5 text-[10.5px] leading-snug" style={{ color: "var(--frp-muted)" }}>{tr?.blurb}</div>
-                <div className="mt-1.5 text-[10px] font-medium" style={{ color: "var(--frp-accent-ink)" }}>
-                  {c.hp} can · {c.mp} mana · {tr?.ability}
-                </div>
-              </button>
-            );
-          })}
+        <div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {CLASSES.map((c) => {
+              const tr = CLASS_TR[c.id];
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => pickPrimary(c.id)}
+                  className="rounded-[12px] border p-3 text-left transition-colors"
+                  style={{
+                    borderColor: cls === c.id ? "var(--frp-accent)" : "var(--frp-line)",
+                    background: cls === c.id ? "var(--frp-accent-soft)" : "var(--frp-canvas)",
+                  }}
+                >
+                  <div className="text-[13px] font-semibold" style={{ color: "var(--frp-ink)" }}>{tr?.name}</div>
+                  <div className="mt-0.5 text-[10px] leading-snug" style={{ color: "var(--frp-muted)" }}>{tr?.blurb}</div>
+                  <div className="mt-1.5 text-[10px] font-medium" style={{ color: "var(--frp-accent-ink)" }}>
+                    {c.hp} can · {c.mp} mana · {tr?.ability}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {dualAllowed ? (
+            <div className="mt-4">
+              <div className="mb-1.5 text-[11px] font-semibold tracking-[0.05em]" style={{ color: "var(--frp-faint)" }}>
+                İkinci sınıf (isteğe bağlı, {difficulty === "easy" ? "kolay" : "normal"} zorlukta)
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCls2(null)}
+                  className="rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-colors"
+                  style={{
+                    background: !cls2 ? "var(--frp-ink)" : "var(--frp-canvas)",
+                    color: !cls2 ? "var(--frp-canvas)" : "var(--frp-muted)",
+                    border: "1px solid var(--frp-line)",
+                  }}
+                >
+                  Yok
+                </button>
+                {CLASSES.filter((c) => c.id !== cls).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCls2(c.id)}
+                    className="rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-colors"
+                    style={{
+                      background: cls2 === c.id ? "var(--frp-accent)" : "var(--frp-canvas)",
+                      color: cls2 === c.id ? "#fff" : "var(--frp-muted)",
+                      border: "1px solid var(--frp-line)",
+                    }}
+                  >
+                    {CLASS_TR[c.id]?.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -121,7 +181,7 @@ export function JoinPanel({ id }: { id: number }) {
                 className="flex flex-col items-center rounded-[12px] border p-3 text-center transition-colors"
                 style={{
                   borderColor: race === r.id ? "var(--frp-accent)" : "var(--frp-line)",
-                  background: race === r.id ? "var(--frp-accent-soft)" : "var(--frp-surface)",
+                  background: race === r.id ? "var(--frp-accent-soft)" : "var(--frp-canvas)",
                 }}
               >
                 <div className="rounded-[10px] p-1.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
@@ -148,7 +208,7 @@ export function JoinPanel({ id }: { id: number }) {
                 onClick={() => setTrait(t)}
                 className="rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-colors"
                 style={{
-                  background: trait === t ? "var(--frp-accent)" : "var(--frp-surface)",
+                  background: trait === t ? "var(--frp-accent)" : "var(--frp-canvas)",
                   color: trait === t ? "#fff" : "var(--frp-muted)",
                   border: "1px solid var(--frp-line)",
                 }}

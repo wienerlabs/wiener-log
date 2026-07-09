@@ -2,6 +2,7 @@ import { PixelPortrait, PixelBar, PixelSprite, SinSigil } from "@/components/frp
 import {
   itemById,
   itemNameTr,
+  itemDescTr,
   RARITY_COLOR,
   RARITY_TR,
   SIN_COLOR,
@@ -33,7 +34,9 @@ export function CharacterCard({
 }) {
   const dom = dominantSin(c);
   const dead = !c.alive;
+  const raised = !c.alive && !!c.controlled_by;
   const clsTr = CLASS_TR[c.class]?.name || c.class;
+  const cls2Tr = c.class2 ? CLASS_TR[c.class2]?.name || c.class2 : null;
   const raceTr = RACE_TR[c.race]?.name || c.race;
 
   return (
@@ -52,6 +55,7 @@ export function CharacterCard({
         >
           <PixelPortrait
             seed={c.portrait_seed}
+            race={c.race}
             cell={compact ? 5 : 7}
             sin={dom && dom.value >= 25 ? dom.sin : null}
           />
@@ -65,7 +69,13 @@ export function CharacterCard({
           </div>
           <div className="text-[11px]" style={{ color: "var(--frp-faint)" }}>
             @{c.handle} · {c.level}. seviye {raceTr} {clsTr}
+            {cls2Tr ? ` / ${cls2Tr}` : ""}
           </div>
+          {raised ? (
+            <div className="mt-0.5 text-[10px] font-medium" style={{ color: "var(--frp-corrupt)" }}>
+              ☠ @{c.controlled_by} tarafından diriltildi
+            </div>
+          ) : null}
           <div className="mt-2 space-y-1.5">
             <BarRow label="CAN" value={c.hp_cur} max={c.hp_max} color="var(--frp-hp)" compact={compact} />
             <BarRow label="MANA" value={c.mp_cur} max={c.mp_max} color="var(--frp-mp)" compact={compact} />
@@ -93,7 +103,7 @@ export function CharacterCard({
               return (
                 <div
                   key={`${it.id}-${i}`}
-                  title={item ? `${itemNameTr(it.id)} (${RARITY_TR[item.rarity]})` : it.id}
+                  title={item ? `${itemNameTr(it.id)} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}` : it.id}
                   className="flex size-9 items-center justify-center rounded-[7px]"
                   style={{ background: "#00000012", border: `1.5px solid ${color}` }}
                 >

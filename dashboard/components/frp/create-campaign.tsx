@@ -20,6 +20,7 @@ export function CreateCampaign() {
   const [setting, setSetting] = useState(DEFAULT_SETTING);
   const [tone, setTone] = useState("karanlık, roman havasında, gri ahlak");
   const [difficulty, setDifficulty] = useState("normal");
+  const [model, setModel] = useState("claude-haiku-4-5");
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
@@ -29,7 +30,7 @@ export function CreateCampaign() {
       const res = await fetch("/api/frp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, setting, tone, difficulty }),
+        body: JSON.stringify({ title, setting, tone, difficulty, model }),
       });
       const d = (await res.json()) as { id?: number };
       if (d.id) router.push(`/tavern/${d.id}`);
@@ -89,6 +90,29 @@ export function CreateCampaign() {
               {d.label}
             </button>
           ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[
+            { id: "claude-haiku-4-5", label: "Hızlı (Haiku)" },
+            { id: "claude-sonnet-4-5", label: "Sinematik (Sonnet)" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setModel(m.id)}
+              className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors"
+              style={{
+                background: model === m.id ? "var(--frp-accent)" : "var(--frp-surface)",
+                color: model === m.id ? "#fff" : "var(--frp-muted)",
+                border: "1px solid var(--frp-line)",
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="-mt-1 text-[10.5px]" style={{ color: "var(--frp-faint)" }}>
+          Hızlı: kısa, çabuk turlar. Sinematik: daha zengin ama yavaş anlatım.
         </div>
         <button
           type="button"

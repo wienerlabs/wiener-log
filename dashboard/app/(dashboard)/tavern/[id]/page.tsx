@@ -57,7 +57,7 @@ export default async function CampaignPage({
 
         {campaign.status === "lobby" && !joined ? (
           <div className="mb-7 max-w-[600px]">
-            <JoinPanel id={cid} />
+            <JoinPanel id={cid} difficulty={campaign.difficulty} />
           </div>
         ) : null}
 

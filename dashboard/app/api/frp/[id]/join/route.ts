@@ -32,6 +32,7 @@ export async function POST(
   const body = (await req.json()) as {
     name?: string;
     cls?: string;
+    cls2?: string | null;
     race?: string;
     trait?: string;
   };
@@ -42,26 +43,45 @@ export async function POST(
   const name = String(body.name || "").slice(0, 40).trim() || `${handle}`;
   const trait = String(body.trait || "").slice(0, 24).trim();
 
+  const dualAllowed =
+    campaign.difficulty === "easy" || campaign.difficulty === "normal";
+  const cls2raw = body.cls2 ? classById(String(body.cls2)) : null;
+  const cls2 = dualAllowed && cls2raw && cls2raw.id !== cls.id ? cls2raw : null;
+
   const existing = await getCharacter(campaignId, handle);
   if (existing) return Response.json({ ok: true });
 
   const stats: Stats = { ...cls.stats };
+  if (cls2)
+    for (const k of Object.keys(stats) as (keyof Stats)[])
+      stats[k] = Math.max(stats[k], cls2.stats[k]);
   for (const [k, v] of Object.entries(race.mods))
     stats[k as keyof Stats] += v as number;
-  const hp = cls.hp + Math.max(0, stats.con - 10);
-  const mp = cls.mp + Math.max(0, Math.floor((stats.int - 10) / 2));
+
+  const baseHp = cls2 ? Math.round((cls.hp + cls2.hp) / 2) : cls.hp;
+  const baseMp = cls2 ? Math.round((cls.mp + cls2.mp) / 2) : cls.mp;
+  const hp = baseHp + Math.max(0, stats.con - 10);
+  const mp = baseMp + Math.max(0, Math.floor((stats.int - 10) / 2));
+
+  const items = [...new Set([...cls.items, ...(cls2 ? cls2.items : [])])]
+    .slice(0, 6)
+    .map((i) => ({ id: i }));
+  const abilities = [cls.ability];
+  if (cls2) abilities.push(cls2.ability);
+  if (trait) abilities.push(`Tabiat: ${trait}`);
 
   await createCharacter({
     campaign_id: campaignId,
     handle,
     name,
     cls: cls.id,
+    cls2: cls2 ? cls2.id : null,
     race: race.id,
     hp,
     mp,
     stats: stats as unknown as Record<string, number>,
-    inventory: cls.items.map((i) => ({ id: i })),
-    abilities: trait ? [cls.ability, `Tabiat: ${trait}`] : [cls.ability],
+    inventory: items,
+    abilities,
     portrait_seed: `${name}:${cls.id}:${race.id}`,
   });
 

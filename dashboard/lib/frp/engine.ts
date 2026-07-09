@@ -70,6 +70,11 @@ const RESOLVE_TOOL = {
             wield: { type: "string" },
             add_ability: { type: "array", items: { type: "string" } },
             set_alive: { type: "boolean" },
+            controlled_by: {
+              type: "string",
+              description:
+                "Set to a necromancer's handle to raise this fallen character as an undead minion under that necromancer's command.",
+            },
           },
           required: ["handle"],
         },
@@ -174,6 +179,11 @@ function applyEffect(c: Character, e: Effect): string[] {
       c.corruption[sin] = clamp((c.corruption[sin] || 0) + (v as number), 0, 100);
     }
   if (e.wield !== undefined) c.wielded = e.wield || null;
+  if (e.controlled_by !== undefined) {
+    const nb = e.controlled_by || null;
+    if (nb && nb !== c.controlled_by) notes.push(`raised:${nb}`);
+    c.controlled_by = nb;
+  }
   if (e.add_ability)
     for (const a of e.add_ability) if (!c.abilities.includes(a)) c.abilities.push(a);
   if (e.set_alive !== undefined) c.alive = e.set_alive;
@@ -222,7 +232,7 @@ async function callGM(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1400,
+        max_tokens: 1000,
         system: SYSTEM_PROMPT,
         tools: [RESOLVE_TOOL],
         tool_choice: { type: "tool", name: "resolve_turn" },
@@ -303,7 +313,9 @@ export async function resolveTurn(
       else if (n.startsWith("corrupt:")) {
         const [, sin, val] = n.split(":");
         extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[sin as Sin]} tarafından daha da ele geçiriliyor. (${val}/100)` });
-      } else if (n === "death")
+      } else if (n.startsWith("raised:"))
+        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, @${n.split(":")[1]} tarafından mezardan çağrıldı. Artık onun hizmetinde savaşıyor.` });
+      else if (n === "death")
         extraTurns.push({ kind: "death", actor: c.handle, content: `${c.name} düştü. Hikâyesi burada bitti.` });
     }
   }

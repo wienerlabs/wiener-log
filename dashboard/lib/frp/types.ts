@@ -37,7 +37,9 @@ export interface Character {
   handle: string;
   name: string;
   class: string;
+  class2: string | null;
   race: string;
+  controlled_by: string | null;
   level: number;
   xp: number;
   hp_cur: number;
@@ -123,6 +125,7 @@ export interface Effect {
   wield?: string | null;
   add_ability?: string[];
   set_alive?: boolean;
+  controlled_by?: string | null;
 }
 
 export interface HiddenRoll {

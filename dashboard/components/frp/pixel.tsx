@@ -27,18 +27,10 @@ export function PixelSprite({
   const rects: ReactNode[] = [];
   for (let y = 0; y < rows.length; y++) {
     for (let x = 0; x < rows[y].length; x++) {
-      const ch = rows[y][x];
-      const color = PALETTE[ch];
+      const color = PALETTE[rows[y][x]];
       if (!color || color === "transparent") continue;
       rects.push(
-        <rect
-          key={`${x}-${y}`}
-          x={x * cell}
-          y={y * cell}
-          width={cell}
-          height={cell}
-          fill={color}
-        />,
+        <rect key={`${x}-${y}`} x={x * cell} y={y * cell} width={cell} height={cell} fill={color} />,
       );
     }
   }
@@ -58,15 +50,16 @@ export function PixelSprite({
 
 function hashSeed(seed: string): number {
   let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
+  const s = seed || "x";
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
 }
 
 function shade(hex: string, amt: number): string {
-  if (!hex) return "#8a8172";
+  if (!hex || hex[0] !== "#") return "#8a8172";
   const n = parseInt(hex.slice(1), 16);
   const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
   const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
@@ -74,64 +67,121 @@ function shade(hex: string, amt: number): string {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
-const SKINS = ["#d7a583", "#9c6b47", "#e8b98f", "#c68642", "#8d5524", "#a9b7c6"];
-const HAIRS = ["#0d1117", "#4a3218", "#6e4b2a", "#8b949e", "#f0c040", "#da3633", "#a371f7"];
-const EYES = ["#2f81f7", "#3fb950", "#6e4b2a", "#010409", "#a371f7"];
+const HAIRS = ["#2a1c12", "#4a3218", "#6e4b2a", "#8b7355", "#c79a45", "#a8433a", "#7a5a8a"];
+const EYES = ["#3a5a8a", "#3f7a4a", "#6e4b2a", "#2a2020", "#7a4a8a"];
+const RACE_SKIN: Record<string, string[]> = {
+  human: ["#d7a583", "#c68642", "#9c6b47", "#e8b98f"],
+  half_elf: ["#e0b48a", "#d7a583", "#c99a6f"],
+  elf: ["#e6cbb0", "#d9b48f", "#efd8c0"],
+  dwarf: ["#cf9968", "#b8895a", "#e0a878"],
+  orc: ["#6f8f43", "#7fa050", "#5f7d3a"],
+  goblin: ["#79a047", "#8cb257", "#6a923c"],
+  tiefling: ["#b45a52", "#c56a5f", "#9c463f"],
+};
 
-function buildPortrait(seed: string, sin?: Sin): (string | null)[][] {
-  const hs = hashSeed(seed);
-  const skin = SKINS[hs % SKINS.length];
-  const hair = HAIRS[(hs >>> 3) % HAIRS.length];
-  const eye = sin ? SIN_COLOR[sin] : EYES[(hs >>> 7) % EYES.length];
-  const beard = ((hs >>> 11) & 1) === 1;
-  const style = (hs >>> 13) % 3;
-  const dark = shade(skin, -26);
+function buildPortrait(
+  seed: string,
+  race?: string,
+  sin?: Sin,
+): (string | null)[][] {
   const N = 12;
   const g: (string | null)[][] = Array.from({ length: N }, () =>
     Array(N).fill(null),
   );
-  for (let y = 2; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = skin;
-  for (let y = 3; y <= 9; y++) {
-    g[y][3] = dark;
-    g[y][8] = dark;
+  try {
+    const hs = hashSeed(seed);
+    const pick = (arr: string[], shift: number): string =>
+      arr && arr.length ? arr[(hs >>> shift) % arr.length] : "#c98d6a";
+    const skins = RACE_SKIN[race || "human"] || RACE_SKIN.human;
+    const skin = pick(skins, 0);
+    const hair = pick(HAIRS, 3);
+    const eye = sin ? SIN_COLOR[sin] || "#2a2020" : pick(EYES, 7);
+    const beard = ((hs >>> 11) & 1) === 1 || race === "dwarf";
+    const style = (hs >>> 13) % 3;
+    const dark = shade(skin, -26);
+
+    for (let y = 2; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = skin;
+    for (let y = 3; y <= 9; y++) {
+      g[y][3] = dark;
+      g[y][8] = dark;
+    }
+    for (let y = 0; y <= 2; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
+    if (style !== 2) for (let y = 2; y <= 6; y++) (g[y][2] = hair), (g[y][9] = hair);
+    if (style === 1) for (let y = 3; y <= 9; y++) (g[y][2] = hair), (g[y][9] = hair);
+    g[3][4] = shade(hair, 12);
+    g[3][7] = shade(hair, 12);
+    g[4][4] = eye;
+    g[4][7] = eye;
+    g[6][5] = dark;
+    g[6][6] = dark;
+    g[8][5] = "#7a4a3a";
+    g[8][6] = "#7a4a3a";
+
+    if (race === "elf" || race === "half_elf") {
+      g[4][2] = hair;
+      g[5][2] = skin;
+      g[6][2] = skin;
+      g[4][9] = hair;
+      g[5][9] = skin;
+      g[6][9] = skin;
+    }
+    if (race === "goblin") {
+      g[3][1] = dark;
+      g[4][1] = skin;
+      g[5][1] = skin;
+      g[3][10] = dark;
+      g[4][10] = skin;
+      g[5][10] = skin;
+    }
+    if (race === "tiefling") {
+      g[0][2] = "#2a1414";
+      g[1][2] = "#4a2420";
+      g[0][9] = "#2a1414";
+      g[1][9] = "#4a2420";
+    }
+    if (race === "orc" || race === "goblin") {
+      g[9][4] = "#eef0f4";
+      g[9][7] = "#eef0f4";
+    }
+    if (beard) {
+      for (let y = 7; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
+      g[8][5] = "#5a3a2f";
+      g[8][6] = "#5a3a2f";
+      if (race === "dwarf") {
+        for (let x = 3; x <= 8; x++) g[1][x] = "#8a8a97";
+        g[0][4] = "#c79a45";
+        g[0][7] = "#c79a45";
+      }
+    }
+    g[11][5] = skin;
+    g[11][6] = skin;
+    if (sin) {
+      g[1][5] = SIN_COLOR[sin] || "#2a2020";
+      g[1][6] = SIN_COLOR[sin] || "#2a2020";
+    }
+    return g;
+  } catch {
+    for (let y = 2; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = "#c98d6a";
+    g[4][4] = "#2a2020";
+    g[4][7] = "#2a2020";
+    return g;
   }
-  for (let y = 0; y <= 2; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
-  if (style !== 2) for (let y = 2; y <= 6; y++) (g[y][2] = hair), (g[y][9] = hair);
-  if (style === 1) for (let y = 3; y <= 9; y++) (g[y][2] = hair), (g[y][9] = hair);
-  g[3][4] = shade(hair, 12);
-  g[3][7] = shade(hair, 12);
-  g[4][4] = eye;
-  g[4][7] = eye;
-  g[6][5] = dark;
-  g[6][6] = dark;
-  g[8][5] = "#7a4a3a";
-  g[8][6] = "#7a4a3a";
-  if (beard) {
-    for (let y = 7; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
-    g[8][5] = "#5a3a2f";
-    g[8][6] = "#5a3a2f";
-  }
-  g[11][5] = skin;
-  g[11][6] = skin;
-  if (sin) {
-    g[1][5] = SIN_COLOR[sin];
-    g[1][6] = SIN_COLOR[sin];
-  }
-  return g;
 }
 
 export function PixelPortrait({
   seed,
   cell = 7,
+  race,
   sin,
   className,
 }: {
   seed: string;
   cell?: number;
+  race?: string | null;
   sin?: Sin | null;
   className?: string;
 }) {
-  const g = buildPortrait(seed, sin ?? undefined);
+  const g = buildPortrait(seed, race ?? undefined, sin ?? undefined);
   const size = 12 * cell;
   const rects: ReactNode[] = [];
   for (let y = 0; y < 12; y++) {
@@ -204,10 +254,7 @@ export function SinSigil({ sin, size = 16 }: { sin: Sin; size?: number }) {
         borderRadius: 3,
       }}
     >
-      <span
-        className="-rotate-45 text-[9px] font-bold leading-none"
-        style={{ color }}
-      >
+      <span className="-rotate-45 text-[9px] font-bold leading-none" style={{ color }}>
         {SIN_LABEL_TR[sin][0]}
       </span>
     </span>

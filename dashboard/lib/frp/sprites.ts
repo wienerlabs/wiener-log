@@ -580,4 +580,18 @@ export const SPRITES: Record<string, string[]> = {
     "..KKhhKK....",
     "...KhhK.....",
   ],
+  race_goblin: [
+    "KK......KK..",
+    "GJK.KK.KJG..",
+    "GJKKGGKKJG..",
+    ".KGJJJJGK...",
+    ".KGJJJJGK...",
+    ".KGrJJrGK...",
+    ".KGJJJJGK...",
+    ".KGJKKJGK...",
+    ".KrGwwGrK...",
+    "..KGJJGK....",
+    "..KKGGKK....",
+    "...KGGK.....",
+  ],
 };

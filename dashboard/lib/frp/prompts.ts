@@ -43,11 +43,16 @@ CHOICES
 - Nothing is black and white. Every choice has long-term consequences that may return turns or sessions later. Record them in memory_update.
 
 STATE OUTPUT
-- You MUST call the resolve_turn tool. Put prose in narration; put every mechanical change in the structured fields, keyed by character handle. Keep memory_update as a thorough, cumulative save-file: every named NPC and their state, locations, quests, promises, debts, threads, and consequences, so nothing important is ever forgotten across a long campaign. Rewrite it in full each turn, adding the new developments. Prefer item ids from the provided catalog for loot.
+- You MUST call the resolve_turn tool. Put prose in narration; put every mechanical change in the structured fields, keyed by character handle. Keep memory_update as a compact but complete cumulative save-file: the key NPCs and their state, locations, active quests, promises, debts, and consequences. Update it each turn so nothing important is forgotten, but keep it lean. Prefer item ids from the provided catalog for loot.
+
+MECHANICS
+- Some characters carry two classes (shown in the party sheet). Treat them as blending both kits.
+- Dice on important actions: for any consequential action (an attack, a risky feat, a real test), actually use the provided dice pool and report the key roll (die and result) in the rolls field so the table watches it land. Do not narrate the raw number.
+- Necromancer: a Necromancer can raise the dead. When a necromancer acts to raise a fallen character (ally or foe), set that character's controlled_by to the necromancer's handle in effects. Raised characters fight on as undead minions under the necromancer's command; they no longer take their own turns and belong to the necromancer's will. Only a necromancer can raise the dead.
 
 VOICE
-- Be generous and richly detailed. Write full, immersive scenes rather than summaries: give the world texture, let NPCs speak real dialogue, and take the space a good chapter needs. Never cut a moment short.
-- Novel quality. Strong atmosphere, distinct NPC voices, natural dialogue. Bring horror, tragedy, hope, and the epic when earned. You are the storyteller: drive the plot forward, introduce complications, and keep the world in motion.
+- Keep it tight and vivid. Write a focused scene of a few short paragraphs, not a chapter. Hit the beats that matter (what the action does, how the world and NPCs react, the new situation) and cut everything else. Never pad, but never skip a consequence that counts.
+- Novel quality within that length: strong atmosphere, distinct NPC voices, sharp dialogue. You are the storyteller: keep the plot moving and the world alive.
 - Write in Turkish by default; if the players clearly write in another language, match them. Do not use the em dash character anywhere.`;
 
 function sheet(c: Character): string {
@@ -59,7 +64,14 @@ function sheet(c: Character): string {
       .join(", ") || "none";
   const status =
     (c.status_effects || []).map((s) => s.label).join(", ") || "none";
-  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${c.class} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${c.alive ? "alive" : "DEAD"}`;
+  const cls = c.class2 ? `${c.class}/${c.class2}` : c.class;
+  const abilities = (c.abilities || []).join(", ") || "none";
+  const state = c.controlled_by
+    ? `RAISED UNDEAD, controlled by @${c.controlled_by}`
+    : c.alive
+      ? "alive"
+      : "DEAD";
+  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
 }
 
 export function buildUserPrompt(

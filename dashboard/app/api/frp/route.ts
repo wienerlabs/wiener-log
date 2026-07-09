@@ -22,17 +22,21 @@ export async function POST(req: Request) {
     setting?: string;
     tone?: string;
     difficulty?: string;
+    model?: string;
   };
   const title = String(body.title || "").slice(0, 120).trim();
   const setting = String(body.setting || "").slice(0, 2000).trim();
   if (!title || !setting)
     return Response.json({ error: "title and setting required" }, { status: 400 });
+  const gm_model = ["claude-haiku-4-5", "claude-sonnet-4-5"].includes(body.model || "")
+    ? (body.model as string)
+    : "claude-haiku-4-5";
   const id = await createCampaign({
     title,
     setting,
     tone: String(body.tone || "").slice(0, 200).trim(),
     host: me(session),
-    gm_model: "claude-sonnet-4-5",
+    gm_model,
     difficulty: ["easy", "normal", "hard", "grim"].includes(body.difficulty || "")
       ? (body.difficulty as string)
       : "normal",
