@@ -49,6 +49,17 @@ export function nodeByKey(key: string | null | undefined): MapNode | undefined {
   return key ? WORLD_MAP[key] : undefined;
 }
 
+export function resolveNode(input: string | null | undefined): MapNode | undefined {
+  if (!input) return undefined;
+  const raw = String(input).trim();
+  if (WORLD_MAP[raw]) return WORLD_MAP[raw];
+  const low = raw.toLowerCase();
+  const slug = low.replace(/\s+/g, "_");
+  return NODES.find(
+    (n) => n.key === slug || n.name.toLowerCase() === low || n.name.toLowerCase().replace(/\s+/g, "_") === slug,
+  );
+}
+
 export function areNeighbors(a: string, b: string): boolean {
   return !!WORLD_MAP[a]?.neighbors.includes(b);
 }

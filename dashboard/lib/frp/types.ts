@@ -192,6 +192,7 @@ export interface GMResult {
   captures?: { node: string; house: string }[];
   impossible?: boolean;
   reason?: string;
+  acting?: { mp_delta?: number; hp_delta?: number; moved_to?: string };
   next_turn?: string;
 }
 

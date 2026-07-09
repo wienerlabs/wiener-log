@@ -37,10 +37,12 @@ TURNS
 
 CHARACTER LOCATION AND SEPARATION (critical, never violate)
 - Each character has their OWN location, shown on their sheet as LOCATION. Characters are often in DIFFERENT places at the same time. The party is NOT always together.
-- Resolve the acting character's turn in THEIR location, among the people and things actually there. Never borrow another character's scene.
-- NEVER move, summon, pull, or teleport a character who is not the one acting. A character stays exactly where their sheet says until that same player chooses to travel. If one character is at the inn and another acts across the city, the first is STILL at the inn; do not bring them into the scene or have them speak.
-- Two characters in different places live in SEPARATE scenes. Do not merge them, do not make one appear beside the other, and do not narrate them meeting unless a player's own action has traveled to the other's location.
-- A character changes location ONLY through their own travel action. You never relocate anyone yourself, not even to make a scene more convenient.
+- The sheet is the truth. Your prose MUST match every character's LOCATION exactly. If a character's sheet says Ocakkent, you may not write them anywhere else, present in another scene, following someone, speaking, or arriving. This keeps the story consistent across turns.
+- Resolve ONLY the acting character's action, in THEIR location, among the people and things actually there. Never borrow another character's scene.
+- Moving the acting character: if their action takes them to a neighboring place (they walk or ride there), set acting.moved_to to that node key. This moves ONLY them, one step, to an adjacent place, and updates their location so later turns stay consistent. If they only try to move but fail (they are stopped, lost, or the magic fizzles), leave acting.moved_to empty.
+- HONOR MOVEMENT AND PLAYER INTENT. When a player travels to a named neighboring place and nothing already established in the fiction truly stops them, they ARRIVE: set acting.moved_to and land them there in a sentence or two. Do NOT invent guards, ambushes, fights, or interruptions to block routine travel, and do not steer them somewhere else. Surprises and consequences belong where the story has earned them, not as a reflex every turn. The players decide where their characters go; you show them getting there.
+- If a player writes that "the party" or "we" go somewhere, or names another character coming along, you STILL move only the acting character. The others do NOT move, do NOT follow, and are NOT in the resulting scene. Never write another character standing up, following, or arriving with them. Each of them must take their own turn to travel.
+- NEVER move, summon, pull, or teleport a character who is not the one acting. Two characters in different places live in SEPARATE scenes; do not merge them or make them meet unless a player's own move brought them to the same place.
 
 DICE
 - A pre-rolled dice pool of six dice types (d4, d6, d8, d10, d12, d20) is provided each turn. Use them to adjudicate outcomes, weighing skills, equipment, wounds, psychology, terrain, weather, and enemy skill. Keep the raw numbers and arithmetic out of your prose; the players feel the outcome, not the math. In the rolls field, report the key dice you actually leaned on (die type and result) so the table can watch them land.
@@ -70,6 +72,13 @@ MONEY
 REWARDS ARE MECHANICAL (the sheet is the single source of truth)
 - Inventory and coin on the sheet are authoritative. ANY time your prose gives a character something, you MUST record it in the SAME turn or it never happened: an item picked up, looted from a body, taken from a chest, found on the road, bought, or handed over goes in loot (handle + item id, which adds it to that character's inventory); coin gained or lost goes in gold_delta on that exact character; an item used up, spent, sold, or handed away goes in remove_items.
 - Example: if a vault holds 40 copper and two daggers and Kael takes them, Kael gets gold_delta 40 and loot [{handle: kael, item: dagger}, {handle: kael, item: dagger}]. Never let a reward you described fail to reach the sheet, and never announce the same find twice (do not re-loot an item the character already carries).
+
+HEALTH AND MANA (personal, mechanical, per character)
+- Every character's HP and MP are their own and are the truth on the sheet. ANY wound, healing, spell, ability, or hard exertion you narrate MUST reach the sheet the SAME turn, or it did not happen.
+- For the ACTING character, record their mana and HP change in the REQUIRED acting object (acting.mp_delta, acting.hp_delta) every single turn. For OTHER characters who are hurt or healed in the scene, use effects with hp_delta/mp_delta. Never narrate mana spent or wasted without a matching negative mp_delta.
+- Casting a spell or using an ability COSTS mana: set a negative acting.mp_delta on the caster, larger for bigger effects. A character cannot spend mana they do not have.
+- Not enough mana: either the effect simply cannot happen (leave it, no change), or the character forces it and suffers backlash: drain their remaining mana to 0 with mp_delta and cost HP with a negative hp_delta for the strain, and say so plainly. Even a failed casting that burns effort should cost some mana.
+- HP: wounds lower HP with hp_delta; healing raises it, never above max. At 0 HP the character dies. Make wounds and drain real and personal, never cosmetic.
 
 EQUIPMENT AND INVENTORY (enforce strictly)
 - Check the acting character's inventory on EVERY action. Characters can only use what is in their inventory. A bow or crossbow needs a "bow"/"crossbow" AND an "arrows" item to fire; when arrows are spent, remove them with remove_items. No bow means no shot; no arrows means no shot. The same holds for any required item (a key to unlock, a focus to cast, a torch to light the dark).
@@ -193,7 +202,7 @@ ${feed}`;
     ? `MAP: @${actorHandle} "${actorChar?.name || actorHandle}" is at ${here.name} (${KIND_TR[here.kind]}${hereHouse ? `, held by House ${hereHouse.name}` : ""}). ${here.blurb}
 Here with them right now: ${companions.length ? companions.map((c) => c.name).join(", ") : "no other player character"}.
 Elsewhere right now (do NOT pull them into this scene): ${elsewhere.length ? elsewhere.map((c) => `${c.name} at ${nodeByKey(c.location)?.name || c.location}`).join("; ") : "no one"}.
-From here they can travel next to: ${ctx.neighbors.map((n) => `${n.name} (${KIND_TR[n.kind]})`).join("; ") || "nowhere nearby"}.`
+From here they can travel next to (put the key in acting.moved_to to actually move there): ${ctx.neighbors.map((n) => `${n.name} [key: ${n.key}] (${KIND_TR[n.kind]})`).join("; ") || "nowhere nearby"}.`
     : "";
   const travelBlock = ctx.dest
     ? `\nTRAVEL THIS TURN: the party leaves ${here?.name || "here"} and journeys to ${ctx.dest.name} (${KIND_TR[ctx.dest.kind]}). Narrate the road and their arrival in a few short sentences; a wild encounter may occur on the way if it fits. End the scene at ${ctx.dest.name}.`
@@ -229,11 +238,11 @@ VALID ITEM IDS FOR LOOT: ${items}
 LOCATION IMAGES: if this scene clearly takes place at one of these, set the location field to its key so the table sees it (otherwise omit it): ${locationsForPrompt()}
 
 HIDDEN DICE POOL (do not reveal these numbers): ${poolToPrompt(pool)}
-${wild ? "\nWILD EVENT: fate turns unexpectedly this turn. Introduce a sudden, unplanned event that complicates or upends the scene: an ambush, a betrayal, a stranger's arrival, a natural disaster, an omen, or a stroke of luck. Weave it into the outcome naturally.\n" : ""}
+${wild ? "\nWILD EVENT: fate turns unexpectedly this turn. Let a small, unplanned twist COMPLICATE (never cancel) what the player chose to do: an omen, a stranger in passing, a stroke of luck, a rumor. It must not block their action or override where they chose to go; weave it lightly into the outcome.\n" : ""}
 It is @${actorHandle}'s turn. Their action:
 "${action}"
 
-REMINDER: write the narration in Turkish (Türkçe), a short paragraph of about four to six sentences, tight but not barren. Stay in @${actorHandle}'s own location and resolve only what they did; never move, summon, or teleport a character who is elsewhere. Let the scene follow the player's action rather than steering them. Still fill the required quests and doom_delta, plus any effects, rolls, or encounter changes.
+REMINDER: write the narration in Turkish (Türkçe), a short paragraph of about four to six sentences, tight but not barren. Stay in @${actorHandle}'s own location and resolve only what they did; never move, follow, or teleport any other character, even if the player says the party comes along. Fill the REQUIRED acting object for @${actorHandle}: their mp_delta (negative if they cast anything, a spell always costs mana), their hp_delta (negative if hurt), and moved_to if they walked to a neighboring place. Let the scene follow the player's action rather than steering them. Still fill the required quests and doom_delta, plus any effects, rolls, or encounter changes.
 
 Resolve this turn. Adjudicate with the hidden dice, advance the living world, and end with the scene frozen for the next player. Set next_turn to the handle who should act next among the living party.`;
 }

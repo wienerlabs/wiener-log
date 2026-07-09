@@ -13,7 +13,7 @@ import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
 import { SIN_LABEL_TR, itemNameTr, itemById, addToInventory, removeFromInventory, stackInventory } from "@/lib/frp/items";
 import { getWorld, saveWorld, addWorldEvent, listWorldEvents } from "@/lib/frp/world";
-import { nodeByKey, WORLD_MAP } from "@/lib/frp/worldmap";
+import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
 import type {
   Character,
@@ -221,6 +221,25 @@ const RESOLVE_TOOL = {
         type: "string",
         description: "Short Turkish sentence explaining why the action is impossible (what they are missing), shown when impossible is true.",
       },
+      acting: {
+        type: "object",
+        description: "What happens to the ACTING character THIS turn. You MUST fill this every turn for the character whose turn it is. This is the authoritative record of their mana, health, and movement; do not put the acting character's mp/hp in effects as well.",
+        properties: {
+          mp_delta: {
+            type: "number",
+            description: "mana change for the acting character this turn. NEGATIVE whenever they cast a spell or use an ability (a spell ALWAYS costs mana; bigger effects cost more). 0 only if they did nothing magical. They cannot go below 0.",
+          },
+          hp_delta: {
+            type: "number",
+            description: "health change for the acting character this turn: negative when hurt, positive when healed, 0 if unchanged. At 0 HP they die.",
+          },
+          moved_to: {
+            type: "string",
+            description: "map node key the acting character walked/rode to this turn if their action moved them to an ADJACENT place; empty if they stayed. Moves ONLY the acting character, never anyone else.",
+          },
+        },
+        required: ["mp_delta", "hp_delta"],
+      },
       location: {
         type: "string",
         description:
@@ -267,7 +286,7 @@ const RESOLVE_TOOL = {
       },
       next_turn: { type: "string" },
     },
-    required: ["narration", "quests", "doom_delta"],
+    required: ["narration", "quests", "doom_delta", "acting"],
   },
 };
 
@@ -431,7 +450,7 @@ export async function resolveTurn(
   }
 
   const pool = rollPool();
-  const wild = rollDie(100) <= 15;
+  const wild = rollDie(100) <= 8;
   const model =
     process.env.FRP_GM_MODEL || campaign.gm_model || "claude-haiku-4-5";
 
@@ -494,6 +513,9 @@ export async function resolveTurn(
       for (const id of e.add_items) s.add(id);
     }
 
+  const actorMpBefore = actor?.mp_cur ?? 0;
+  const actorHpBefore = actor?.hp_cur ?? 0;
+
   for (const e of gm.effects || []) {
     const c = byHandle.get(e.handle);
     if (!c) continue;
@@ -516,6 +538,20 @@ export async function resolveTurn(
     }
   }
 
+  if (actor && gm.acting) {
+    const mpd = Number(gm.acting.mp_delta) || 0;
+    const hpd = Number(gm.acting.hp_delta) || 0;
+    if (mpd && actor.mp_cur === actorMpBefore)
+      actor.mp_cur = clamp(actor.mp_cur + mpd, 0, actor.mp_max);
+    if (hpd && actor.hp_cur === actorHpBefore) {
+      actor.hp_cur = clamp(actor.hp_cur + hpd, 0, actor.hp_max);
+      if (actor.hp_cur <= 0 && actor.alive) {
+        actor.alive = false;
+        extraTurns.push({ kind: "death", actor: actor.handle, content: `${actor.name} düştü. Hikâyesi burada bitti.` });
+      }
+    }
+  }
+
   const necros = characters.filter(
     (c) => (c.class === "necromancer" || c.class2 === "necromancer") && c.alive,
   );
@@ -526,7 +562,14 @@ export async function resolveTurn(
       for (const r of raised.slice(cap)) r.controlled_by = null;
   }
 
-  if (dest && actor) actor.location = dest.key;
+  let moveTarget: string | null = dest?.key || null;
+  const gmMoved = gm.acting?.moved_to;
+  if (!moveTarget && actor?.location && gmMoved) {
+    const mt = resolveNode(gmMoved);
+    if (mt && (mt.key === actor.location || areNeighbors(actor.location, mt.key)))
+      moveTarget = mt.key;
+  }
+  if (moveTarget && actor) actor.location = moveTarget;
 
   const lootReveals: { handle: string; item: string; rarity: string }[] = [];
   for (const lt of gm.loot || []) {
@@ -653,10 +696,11 @@ export async function resolveTurn(
       if (houseById(k)) world.factions[k] = clamp((world.factions[k] ?? 50) + Number(v), 0, 100);
   if (Array.isArray(gm.captures))
     for (const cap of gm.captures.slice(0, 4)) {
+      const capNode = resolveNode(cap?.node);
       const h = houseById(cap?.house || "");
-      if (cap?.node && WORLD_MAP[cap.node] && h && world.node_control[cap.node] !== cap.house) {
-        world.node_control[cap.node] = cap.house;
-        worldEventQueue.push({ kind: "capture", text: `${WORLD_MAP[cap.node].name}, ${h.name} hanedanının eline geçti.`, house: cap.house });
+      if (capNode && h && world.node_control[capNode.key] !== cap.house) {
+        world.node_control[capNode.key] = cap.house;
+        worldEventQueue.push({ kind: "capture", text: `${capNode.name}, ${h.name} hanedanının eline geçti.`, house: cap.house });
       }
     }
   const bossFell =
@@ -675,8 +719,8 @@ export async function resolveTurn(
 
   const position = actor?.location || campaign.position;
   const discovered =
-    dest && !(campaign.discovered || []).includes(dest.key)
-      ? [...(campaign.discovered || []), dest.key]
+    moveTarget && !(campaign.discovered || []).includes(moveTarget)
+      ? [...(campaign.discovered || []), moveTarget]
       : campaign.discovered || [];
 
   await updateCampaign(campaignId, {
