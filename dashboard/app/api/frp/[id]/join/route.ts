@@ -29,12 +29,18 @@ export async function POST(
   if (campaign.status !== "lobby")
     return Response.json({ error: "campaign already started" }, { status: 400 });
 
-  const body = (await req.json()) as { name?: string; cls?: string; race?: string };
+  const body = (await req.json()) as {
+    name?: string;
+    cls?: string;
+    race?: string;
+    trait?: string;
+  };
   const cls = classById(String(body.cls || ""));
   const race = raceById(String(body.race || ""));
   if (!cls || !race)
     return Response.json({ error: "pick a class and race" }, { status: 400 });
   const name = String(body.name || "").slice(0, 40).trim() || `${handle}`;
+  const trait = String(body.trait || "").slice(0, 24).trim();
 
   const existing = await getCharacter(campaignId, handle);
   if (existing) return Response.json({ ok: true });
@@ -55,7 +61,7 @@ export async function POST(
     mp,
     stats: stats as unknown as Record<string, number>,
     inventory: cls.items.map((i) => ({ id: i })),
-    abilities: [cls.ability],
+    abilities: trait ? [cls.ability, `Tabiat: ${trait}`] : [cls.ability],
     portrait_seed: `${name}:${cls.id}:${race.id}`,
   });
 

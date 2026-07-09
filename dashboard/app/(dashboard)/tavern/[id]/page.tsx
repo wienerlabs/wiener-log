@@ -37,40 +37,40 @@ export default async function CampaignPage({
         href="/tavern"
         className="mb-5 inline-flex items-center gap-1 text-[13px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
       >
-        <ChevronLeft className="size-4" /> Tavern
+        <ChevronLeft className="size-4" /> Meyhane
       </Link>
 
-      <header className="mb-7">
-        <h1 className="text-[26px] font-semibold tracking-[-0.03em] text-[var(--color-ink)]">
-          {campaign.title}
-        </h1>
-        <p className="mt-2 max-w-[760px] text-[13.5px] leading-relaxed text-[var(--color-muted)]">
-          {campaign.setting}
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--color-faint)]">
-          <span className="capitalize">{campaign.difficulty}</span>
-          <span>·</span>
-          <span>host @{campaign.host}</span>
-          <span>·</span>
-          <span>{characters.length} in the party</span>
-        </div>
-      </header>
+      <div className="frp-page">
+        <header className="mb-7">
+          <h1 className="text-[26px] font-semibold tracking-[-0.03em]" style={{ color: "var(--frp-ink)" }}>
+            {campaign.title}
+          </h1>
+          <p className="mt-2 max-w-[760px] text-[13.5px] leading-relaxed" style={{ color: "var(--frp-muted)" }}>
+            {campaign.setting}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]" style={{ color: "var(--frp-faint)" }}>
+            <span>kurucu @{campaign.host}</span>
+            <span>·</span>
+            <span>takımda {characters.length} kişi</span>
+          </div>
+        </header>
 
-      {campaign.status === "lobby" && !joined ? (
-        <div className="mb-7 max-w-[560px]">
-          <JoinPanel id={cid} />
-        </div>
-      ) : null}
+        {campaign.status === "lobby" && !joined ? (
+          <div className="mb-7 max-w-[600px]">
+            <JoinPanel id={cid} />
+          </div>
+        ) : null}
 
-      <GameView
-        id={cid}
-        initialCampaign={campaign}
-        initialCharacters={characters}
-        initialTurns={turns}
-        me={handle}
-        isHost={isHost}
-        joined={joined}
-      />
+        <GameView
+          id={cid}
+          initialCampaign={campaign}
+          initialCharacters={characters}
+          initialTurns={turns}
+          me={handle}
+          isHost={isHost}
+          joined={joined}
+        />
+      </div>
     </div>
   );
 }

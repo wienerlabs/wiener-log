@@ -42,7 +42,7 @@ const primary = [
   { href: "/explore", label: "Explore", icon: Compass },
   { href: "/chat", label: "Team chat", icon: MessagesSquare },
   { href: "/vault", label: "Vault", icon: FileText },
-  { href: "/tavern", label: "Tavern", icon: Dices },
+  { href: "/tavern", label: "Meyhane", icon: Dices },
   { href: "/members", label: "Members", icon: Users },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/onboarding", label: "Onboarding", icon: UserPlus },

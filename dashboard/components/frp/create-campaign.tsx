@@ -2,19 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui";
 import { Sparkles } from "lucide-react";
 
 const DEFAULT_SETTING =
-  "A continent where the gods forged seven cursed weapons, one for each deadly sin. Each weapon corrupts whoever wields it, turning them into the sin itself. If all seven are gathered, the Seventh Seal breaks and the world ends. The party begins as nobodies caught in the hunt for the sin weapons, hunted by cults, kings, and worse.";
+  "Tanrıların, yedi ölümcül günahı mühürlemek için yedi lanetli silah dövdüğü bir kıta. Her silah, onu kuşananı temsil ettiği günaha dönüştürür. Yedisi bir araya gelirse Yedinci Mühür kırılır ve dünya son bulur. Takım, silahların peşindeki tarikatlar, krallar ve daha beteri tarafından kovalanan sıradan insanlar olarak başlar.";
 
-const DIFFICULTIES = ["easy", "normal", "hard", "grim"];
+const DIFFICULTIES: { id: string; label: string }[] = [
+  { id: "easy", label: "Kolay" },
+  { id: "normal", label: "Normal" },
+  { id: "hard", label: "Zor" },
+  { id: "grim", label: "Acımasız" },
+];
 
 export function CreateCampaign() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [setting, setSetting] = useState(DEFAULT_SETTING);
-  const [tone, setTone] = useState("grim, novelistic, morally grey");
+  const [tone, setTone] = useState("karanlık, roman havasında, gri ahlak");
   const [difficulty, setDifficulty] = useState("normal");
   const [busy, setBusy] = useState(false);
 
@@ -34,45 +38,55 @@ export function CreateCampaign() {
     }
   };
 
+  const field = {
+    background: "var(--frp-surface)",
+    border: "1px solid var(--frp-line)",
+    color: "var(--frp-ink)",
+  } as const;
+
   return (
-    <Card className="p-5">
-      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-ink)]">
-        <Sparkles className="size-[15px] text-[var(--color-accent)]" strokeWidth={2} />
-        Forge a new saga
+    <div className="frp-page">
+      <div className="mb-3 flex items-center gap-2 text-[14px] font-semibold" style={{ color: "var(--frp-ink)" }}>
+        <Sparkles className="size-[16px]" style={{ color: "var(--frp-accent)" }} strokeWidth={2} />
+        Yeni bir efsane döv
       </div>
       <div className="flex flex-col gap-2.5">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Saga title"
-          className="rounded-[11px] border border-[var(--color-line)] bg-[var(--color-canvas)] px-3.5 py-2 text-[13.5px] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          placeholder="Efsanenin adı"
+          className="rounded-[11px] px-3.5 py-2 text-[13.5px] outline-none"
+          style={field}
         />
         <textarea
           value={setting}
           onChange={(e) => setSetting(e.target.value)}
-          rows={4}
-          placeholder="Setting: the world the Game Master will run"
-          className="resize-none rounded-[11px] border border-[var(--color-line)] bg-[var(--color-canvas)] px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          rows={5}
+          placeholder="Dünya: Anlatıcının yürüteceği evren"
+          className="resize-none rounded-[11px] px-3.5 py-2.5 text-[13px] leading-relaxed outline-none"
+          style={field}
         />
         <input
           value={tone}
           onChange={(e) => setTone(e.target.value)}
-          placeholder="Tone"
-          className="rounded-[11px] border border-[var(--color-line)] bg-[var(--color-canvas)] px-3.5 py-2 text-[13px] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          placeholder="Ton"
+          className="rounded-[11px] px-3.5 py-2 text-[13px] outline-none"
+          style={field}
         />
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {DIFFICULTIES.map((d) => (
             <button
-              key={d}
+              key={d.id}
               type="button"
-              onClick={() => setDifficulty(d)}
-              className={`rounded-[9px] px-3 py-1.5 text-[12px] font-medium capitalize transition-colors ${
-                difficulty === d
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "bg-[var(--color-canvas)] text-[var(--color-muted)] ring-1 ring-[var(--color-ring)]"
-              }`}
+              onClick={() => setDifficulty(d.id)}
+              className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors"
+              style={{
+                background: difficulty === d.id ? "var(--frp-accent)" : "var(--frp-surface)",
+                color: difficulty === d.id ? "#fff" : "var(--frp-muted)",
+                border: "1px solid var(--frp-line)",
+              }}
             >
-              {d}
+              {d.label}
             </button>
           ))}
         </div>
@@ -80,11 +94,12 @@ export function CreateCampaign() {
           type="button"
           onClick={create}
           disabled={busy || !title.trim()}
-          className="mt-1 rounded-[11px] bg-[var(--color-btn)] px-4 py-2.5 text-[13.5px] font-medium text-[var(--color-btn-fg)] transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="mt-1 rounded-[11px] px-4 py-2.5 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          style={{ background: "var(--frp-accent)" }}
         >
-          {busy ? "Forging..." : "Create saga"}
+          {busy ? "Dövülüyor..." : "Efsaneyi yarat"}
         </button>
       </div>
-    </Card>
+    </div>
   );
 }

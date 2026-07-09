@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { CharacterCard } from "@/components/frp/character-card";
 import { Transcript } from "@/components/frp/transcript";
 import { PixelSprite, PixelBar } from "@/components/frp/pixel";
+import { ThinkingDice } from "@/components/frp/dice";
 import type { Campaign, Character, Turn } from "@/lib/frp/types";
 import {
-  Wand2,
   SendHorizontal,
   Play,
   SkipForward,
   Pause,
   Square,
+  RotateCcw,
   Swords,
 } from "lucide-react";
 
@@ -42,8 +43,7 @@ export function GameView({
   const lastId = useRef(initialTurns.reduce((m, t) => Math.max(m, t.id), 0));
   const endRef = useRef<HTMLDivElement>(null);
 
-  const isMyTurn =
-    campaign.status === "active" && campaign.current_turn === me;
+  const isMyTurn = campaign.status === "active" && campaign.current_turn === me;
   const myChar = characters.find((c) => c.handle === me);
 
   useEffect(() => {
@@ -65,6 +65,9 @@ export function GameView({
       if (d.turns.length) {
         setTurns((prev) => [...prev, ...d.turns]);
         lastId.current = d.turns.reduce((m, t) => Math.max(m, t.id), lastId.current);
+      } else if (d.turns.length === 0 && lastId.current > 0 && d.campaign.round === 0) {
+        setTurns([]);
+        lastId.current = 0;
       }
     } catch {
       /* ignore */
@@ -102,6 +105,7 @@ export function GameView({
 
   const control = async (c: string) => {
     if (sending) return;
+    if (c === "restart" && !window.confirm("Hikâye sıfırlanacak ve takım tam canla lobiye dönecek. Emin misin?")) return;
     setSending(true);
     if (c === "start") setThinking(true);
     try {
@@ -128,43 +132,42 @@ export function GameView({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
       <div className="min-w-0">
         <div
-          className={`mb-4 flex items-center justify-between rounded-[12px] px-4 py-2.5 text-[13px] font-medium ${
-            isMyTurn
-              ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
-              : "bg-[var(--color-surface)] text-[var(--color-ink-soft)] ring-1 ring-[var(--color-ring)]"
-          }`}
+          className="mb-4 flex items-center justify-between rounded-[12px] px-4 py-2.5 text-[13px] font-medium"
+          style={{
+            background: isMyTurn ? "var(--frp-accent-soft)" : "var(--frp-surface)",
+            color: isMyTurn ? "var(--frp-accent-ink)" : "var(--frp-ink-soft)",
+            border: "1px solid var(--frp-line)",
+          }}
         >
           {campaign.status === "lobby" ? (
-            <span>The party is gathering. Waiting for the host to begin.</span>
+            <span>Takım toplanıyor. Anlatıcının başlatmasını bekliyor.</span>
           ) : campaign.status === "ended" ? (
-            <span>This saga has ended.</span>
+            <span>Bu efsane sona erdi.</span>
           ) : campaign.status === "paused" ? (
-            <span>The tale is paused.</span>
+            <span>Hikâye duraklatıldı.</span>
           ) : isMyTurn ? (
-            <span>Your move, {myChar?.name || "traveller"}. The world holds its breath.</span>
+            <span>Sıra sende, {myChar?.name || "yolcu"}. Dünya nefesini tuttu.</span>
           ) : (
-            <span>The world waits on {turnName}.</span>
+            <span>Dünya {turnName} oyuncusunu bekliyor.</span>
           )}
-          <span className="text-[11px] text-[var(--color-faint)]">Round {campaign.round}</span>
+          <span className="text-[11px]" style={{ color: "var(--frp-faint)" }}>{campaign.round}. tur</span>
         </div>
 
         {campaign.encounter?.active ? (
-          <div className="mb-4 rounded-[14px] bg-[var(--color-danger-soft)] p-4 ring-1 ring-[var(--color-danger)]">
-            <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-danger)]">
+          <div className="mb-4 rounded-[14px] p-4" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-danger)" }}>
+            <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--frp-danger)" }}>
               <Swords className="size-[14px]" strokeWidth={2} />
               {campaign.encounter.name}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {campaign.encounter.enemies.map((e, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <div className="shrink-0 rounded-[8px] bg-[var(--color-canvas)] p-1 ring-1 ring-[var(--color-ring)]">
+                  <div className="shrink-0 rounded-[8px] p-1" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
                     <PixelSprite name={e.sprite} cell={3} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[11.5px] font-medium text-[var(--color-ink)]">
-                      {e.name}
-                    </div>
-                    <PixelBar value={e.hp} max={e.hp_max} color="#da3633" seg={8} height={7} />
+                    <div className="truncate text-[11.5px] font-medium" style={{ color: "var(--frp-ink)" }}>{e.name}</div>
+                    <PixelBar value={e.hp} max={e.hp_max} color="var(--frp-danger)" seg={8} height={7} />
                   </div>
                 </div>
               ))}
@@ -172,18 +175,19 @@ export function GameView({
           </div>
         ) : null}
 
-        <div className="rounded-[16px] border border-[var(--color-line)] bg-[var(--color-canvas)] p-4 sm:p-5">
+        <div className="rounded-[16px] p-4 sm:p-5" style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}>
           {turns.length === 0 ? (
-            <div className="py-16 text-center text-[13px] text-[var(--color-faint)]">
-              The story has not begun. The host opens the world.
+            <div className="py-16 text-center text-[13px]" style={{ color: "var(--frp-faint)" }}>
+              Hikâye henüz başlamadı. Anlatıcı dünyayı açacak.
             </div>
           ) : (
             <Transcript turns={turns} characters={charMap} />
           )}
           {thinking ? (
-            <div className="mt-4 flex items-center gap-2 rounded-[12px] border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] p-4 text-[13px] text-[var(--color-muted)]">
-              <Wand2 className="size-[14px] animate-pulse text-[var(--color-accent)]" strokeWidth={2} />
-              <span className="animate-pulse">The Game Master weaves the tale...</span>
+            <div className="mt-4 flex items-center gap-2.5 rounded-[12px] border-l-[3px] p-4 text-[13px]" style={{ borderColor: "var(--frp-accent)", background: "var(--frp-raised)", color: "var(--frp-muted)" }}>
+              <ThinkingDice size={22} />
+              <span>Anlatıcı düşünüyor</span>
+              <span className="frp-bob inline-block" style={{ color: "var(--frp-accent)" }}>...</span>
             </div>
           ) : null}
           <div ref={endRef} />
@@ -191,57 +195,62 @@ export function GameView({
 
         {joined && campaign.status === "active" ? (
           <div className="mt-4">
-            {campaign.status === "active" ? (
-              <div className="mb-2 flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => isMyTurn && myChar?.alive && setMode("action")}
-                  disabled={!isMyTurn || !myChar?.alive}
-                  className={`rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                    mode === "action"
-                      ? "bg-[var(--color-accent)] text-[var(--color-btn-fg)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-muted)] ring-1 ring-[var(--color-ring)] disabled:opacity-40"
-                  }`}
-                >
-                  Action
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("talk")}
-                  className={`rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                    mode === "talk"
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
-                      : "bg-[var(--color-surface)] text-[var(--color-muted)] ring-1 ring-[var(--color-ring)]"
-                  }`}
-                >
-                  Table talk
-                </button>
-              </div>
-            ) : null}
-            {campaign.status === "active" ? (
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-                  }}
-                  rows={2}
-                  placeholder={
-                    mode === "action"
-                      ? "Describe what your character does..."
-                      : "Say something to the table (out of character)..."
-                  }
-                  className="flex-1 resize-none rounded-[12px] border border-[var(--color-line)] bg-[var(--color-surface)] px-3.5 py-2.5 text-[13.5px] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-                />
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={sending || !text.trim()}
-                  className="flex size-11 items-center justify-center rounded-[12px] bg-[var(--color-accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  <SendHorizontal className="size-[18px]" strokeWidth={2} />
-                </button>
+            <div className="mb-2 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => isMyTurn && myChar?.alive && setMode("action")}
+                disabled={!isMyTurn || !myChar?.alive}
+                className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40"
+                style={{
+                  background: mode === "action" ? "var(--frp-accent)" : "var(--frp-surface)",
+                  color: mode === "action" ? "#fff" : "var(--frp-muted)",
+                  border: "1px solid var(--frp-line)",
+                }}
+              >
+                Eylem
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("talk")}
+                className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors"
+                style={{
+                  background: mode === "talk" ? "var(--frp-ink)" : "var(--frp-surface)",
+                  color: mode === "talk" ? "var(--frp-canvas)" : "var(--frp-muted)",
+                  border: "1px solid var(--frp-line)",
+                }}
+              >
+                Masa sohbeti
+              </button>
+            </div>
+            <div className="flex items-end gap-2">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+                }}
+                rows={2}
+                placeholder={
+                  mode === "action"
+                    ? "Karakterin ne yapıyor, anlat..."
+                    : "Masaya bir şey söyle (rol dışı)..."
+                }
+                className="flex-1 resize-none rounded-[12px] px-3.5 py-2.5 text-[13.5px] outline-none"
+                style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)", color: "var(--frp-ink)" }}
+              />
+              <button
+                type="button"
+                onClick={submit}
+                disabled={sending || !text.trim()}
+                className="flex size-11 items-center justify-center rounded-[12px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ background: "var(--frp-accent)" }}
+              >
+                <SendHorizontal className="size-[18px]" strokeWidth={2} />
+              </button>
+            </div>
+            {mode === "action" && !isMyTurn ? (
+              <div className="mt-1.5 text-[11px]" style={{ color: "var(--frp-faint)" }}>
+                Sıran değil, ama masada konuşabilirsin.
               </div>
             ) : null}
           </div>
@@ -250,38 +259,36 @@ export function GameView({
 
       <div className="flex flex-col gap-4">
         {isHost ? (
-          <div className="flex flex-wrap gap-1.5 rounded-[12px] bg-[var(--color-surface)] p-2 ring-1 ring-[var(--color-ring)]">
+          <div className="flex flex-wrap gap-1.5 rounded-[12px] p-2" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
             {campaign.status === "lobby" ? (
-              <HostBtn onClick={() => control("start")} disabled={sending} icon={Play} label="Begin saga" primary />
+              <HostBtn onClick={() => control("start")} disabled={sending} icon={Play} label="Efsaneyi başlat" primary />
             ) : null}
             {campaign.status === "active" ? (
               <>
-                <HostBtn onClick={() => control("skip")} disabled={sending} icon={SkipForward} label="Skip" />
-                <HostBtn onClick={() => control("pause")} disabled={sending} icon={Pause} label="Pause" />
+                <HostBtn onClick={() => control("skip")} disabled={sending} icon={SkipForward} label="Atla" />
+                <HostBtn onClick={() => control("pause")} disabled={sending} icon={Pause} label="Duraklat" />
               </>
             ) : null}
             {campaign.status === "paused" ? (
-              <HostBtn onClick={() => control("resume")} disabled={sending} icon={Play} label="Resume" />
+              <HostBtn onClick={() => control("resume")} disabled={sending} icon={Play} label="Devam et" />
             ) : null}
-            {campaign.status !== "ended" ? (
-              <HostBtn onClick={() => control("end")} disabled={sending} icon={Square} label="End" />
+            {campaign.status !== "lobby" ? (
+              <HostBtn onClick={() => control("restart")} disabled={sending} icon={RotateCcw} label="Yeniden başlat" />
+            ) : null}
+            {campaign.status !== "ended" && campaign.status !== "lobby" ? (
+              <HostBtn onClick={() => control("end")} disabled={sending} icon={Square} label="Bitir" />
             ) : null}
           </div>
         ) : null}
 
-        <div className="text-[11px] font-semibold tracking-[0.06em] text-[var(--color-faint)]">
-          Party
+        <div className="text-[11px] font-semibold tracking-[0.06em]" style={{ color: "var(--frp-faint)" }}>
+          Takım
         </div>
         {myChar ? <CharacterCard character={myChar} isTurn={campaign.current_turn === me} /> : null}
         {characters
           .filter((c) => c.handle !== me)
           .map((c) => (
-            <CharacterCard
-              key={c.id}
-              character={c}
-              isTurn={campaign.current_turn === c.handle}
-              compact
-            />
+            <CharacterCard key={c.id} character={c} isTurn={campaign.current_turn === c.handle} compact />
           ))}
       </div>
     </div>
@@ -306,11 +313,12 @@ function HostBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${
+      className="inline-flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40"
+      style={
         primary
-          ? "bg-[var(--color-accent)] text-white hover:opacity-90"
-          : "text-[var(--color-ink-soft)] hover:bg-[var(--color-line-soft)]"
-      }`}
+          ? { background: "var(--frp-accent)", color: "#fff" }
+          : { color: "var(--frp-ink-soft)" }
+      }
     >
       <Icon className="size-[13px]" strokeWidth={2} />
       {label}

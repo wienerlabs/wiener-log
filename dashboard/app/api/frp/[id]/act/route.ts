@@ -5,6 +5,7 @@ import {
   getCharacter,
   appendTurn,
   updateCampaign,
+  restartCampaign,
 } from "@/lib/frp/db";
 import { resolveTurn } from "@/lib/frp/engine";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
@@ -70,7 +71,7 @@ export async function POST(
         campaignId,
         "system",
         "system",
-        "The campaign begins. The Game Master opens the world.",
+        "Efsane başlıyor. Anlatıcı dünyayı açıyor.",
         null,
         1,
       );
@@ -92,7 +93,7 @@ export async function POST(
         campaignId,
         "gm",
         "system",
-        `The Game Master moves past @${campaign.current_turn}.`,
+        `Anlatıcı, @${campaign.current_turn} oyuncusunun sırasını atlıyor.`,
         null,
         campaign.round,
       );
@@ -108,7 +109,11 @@ export async function POST(
     }
     if (body.control === "end") {
       await updateCampaign(campaignId, fields(campaign, { status: "ended" }));
-      await appendTurn(campaignId, "system", "system", "The campaign ends.", null, campaign.round);
+      await appendTurn(campaignId, "system", "system", "Efsane burada sona erdi.", null, campaign.round);
+      return Response.json({ ok: true });
+    }
+    if (body.control === "restart") {
+      await restartCampaign(campaignId);
       return Response.json({ ok: true });
     }
     return Response.json({ error: "unknown control" }, { status: 400 });

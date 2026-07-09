@@ -9,7 +9,7 @@ import {
 } from "@/lib/frp/db";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/frp/prompts";
 import { rollPool } from "@/lib/frp/dice";
-import { SIN_LABEL } from "@/lib/frp/items";
+import { SIN_LABEL_TR, itemNameTr } from "@/lib/frp/items";
 import type {
   Character,
   Effect,
@@ -76,10 +76,16 @@ const RESOLVE_TOOL = {
       },
       rolls: {
         type: "array",
+        description:
+          "The key dice you actually rolled this turn (die type and result), so the table can see them. Pull results from the provided hidden pool.",
         items: {
           type: "object",
-          properties: { label: { type: "string" }, result: { type: "number" } },
-          required: ["label", "result"],
+          properties: {
+            label: { type: "string" },
+            die: { type: "number", description: "one of 4, 6, 8, 10, 12, 20" },
+            result: { type: "number" },
+          },
+          required: ["label", "die", "result"],
         },
       },
       scene_update: { type: "string" },
@@ -216,7 +222,7 @@ async function callGM(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1800,
+        max_tokens: 1400,
         system: SYSTEM_PROMPT,
         tools: [RESOLVE_TOOL],
         tool_choice: { type: "tool", name: "resolve_turn" },
@@ -271,11 +277,15 @@ export async function resolveTurn(
       campaignId,
       "gm",
       "system",
-      "The threads of fate tangle. The Game Master pauses; try again in a moment.",
+      "Kaderin iplikleri düğümlendi. Anlatıcı bir an durakladı; birazdan tekrar dene.",
       null,
       campaign.round,
     );
     return { ok: false, error: "gm unavailable" };
+  }
+
+  if (!opts.isOpening && (!gm.rolls || gm.rolls.length === 0)) {
+    gm.rolls = [{ label: "Kader", die: 20, result: pool.d20[0] }];
   }
 
   const byHandle = new Map(characters.map((c) => [c.handle, c]));
@@ -287,14 +297,14 @@ export async function resolveTurn(
     const notes = applyEffect(c, e);
     for (const n of notes) {
       if (n.startsWith("level:"))
-        extraTurns.push({ kind: "system", actor: c.handle, content: `${c.name} reaches level ${n.split(":")[1]}.` });
+        extraTurns.push({ kind: "system", actor: c.handle, content: `${c.name} ${n.split(":")[1]}. seviyeye ulaştı.` });
       else if (n.startsWith("lost:"))
-        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name} is consumed by ${SIN_LABEL[n.split(":")[1] as Sin]}. They belong to the sin now.` });
+        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[n.split(":")[1] as Sin]} günahına yenik düştü. Artık ona ait.` });
       else if (n.startsWith("corrupt:")) {
         const [, sin, val] = n.split(":");
-        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name} slips deeper into ${SIN_LABEL[sin as Sin]}. (${val}/100)` });
+        extraTurns.push({ kind: "transform", actor: c.handle, content: `${c.name}, ${SIN_LABEL_TR[sin as Sin]} tarafından daha da ele geçiriliyor. (${val}/100)` });
       } else if (n === "death")
-        extraTurns.push({ kind: "death", actor: c.handle, content: `${c.name} falls. Their story ends here.` });
+        extraTurns.push({ kind: "death", actor: c.handle, content: `${c.name} düştü. Hikâyesi burada bitti.` });
     }
   }
 
@@ -311,7 +321,7 @@ export async function resolveTurn(
     campaign.round,
   );
   for (const lt of gm.loot || []) {
-    extraTurns.push({ kind: "loot", actor: lt.handle, content: `${lt.handle} obtained ${lt.item}.` });
+    extraTurns.push({ kind: "loot", actor: lt.handle, content: `${lt.handle}, ${itemNameTr(lt.item)} buldu.` });
   }
   for (const t of extraTurns)
     await appendTurn(campaignId, t.actor, t.kind, noDash(t.content), null, campaign.round);
@@ -365,7 +375,7 @@ export async function resolveTurn(
         recipient: next,
         actor: "gm",
         kind: "frp_turn",
-        body: `Your turn in "${campaign.title}"`,
+        body: `"${campaign.title}" efsanesinde sıra sende`,
         link: `/tavern/${campaignId}`,
       });
     } catch {

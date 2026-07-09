@@ -127,6 +127,7 @@ export interface Effect {
 
 export interface HiddenRoll {
   label: string;
+  die: number;
   result: number;
 }
 

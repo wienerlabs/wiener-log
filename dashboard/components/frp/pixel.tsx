@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { PALETTE, SPRITES } from "@/lib/frp/sprites";
-import { SIN_COLOR, SIN_LABEL } from "@/lib/frp/items";
+import { SIN_COLOR, SIN_LABEL_TR } from "@/lib/frp/items";
 import type { Sin } from "@/lib/frp/types";
 
 function normalize(rows: string[]): string[] {
@@ -66,6 +66,7 @@ function hashSeed(seed: string): number {
 }
 
 function shade(hex: string, amt: number): string {
+  if (!hex) return "#8a8172";
   const n = parseInt(hex.slice(1), 16);
   const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
   const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
@@ -80,10 +81,10 @@ const EYES = ["#2f81f7", "#3fb950", "#6e4b2a", "#010409", "#a371f7"];
 function buildPortrait(seed: string, sin?: Sin): (string | null)[][] {
   const hs = hashSeed(seed);
   const skin = SKINS[hs % SKINS.length];
-  const hair = HAIRS[(hs >> 3) % HAIRS.length];
-  const eye = sin ? SIN_COLOR[sin] : EYES[(hs >> 7) % EYES.length];
-  const beard = ((hs >> 11) & 1) === 1;
-  const style = (hs >> 13) % 3;
+  const hair = HAIRS[(hs >>> 3) % HAIRS.length];
+  const eye = sin ? SIN_COLOR[sin] : EYES[(hs >>> 7) % EYES.length];
+  const beard = ((hs >>> 11) & 1) === 1;
+  const style = (hs >>> 13) % 3;
   const dark = shade(skin, -26);
   const N = 12;
   const g: (string | null)[][] = Array.from({ length: N }, () =>
@@ -162,22 +163,27 @@ export function PixelBar({
   color,
   seg = 14,
   height = 12,
+  track = "#d3c4a4",
 }: {
   value: number;
   max: number;
   color: string;
   seg?: number;
   height?: number;
+  track?: string;
 }) {
   const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   const filled = Math.round(ratio * seg);
   return (
-    <div className="flex gap-[2px]" style={{ height }}>
+    <div
+      className="flex gap-[2px] rounded-[3px] p-[2px]"
+      style={{ height, background: "#00000012" }}
+    >
       {Array.from({ length: seg }).map((_, i) => (
         <div
           key={i}
           className="flex-1 rounded-[1px]"
-          style={{ background: i < filled ? color : "#21262d", height }}
+          style={{ background: i < filled ? color : track }}
         />
       ))}
     </div>
@@ -188,12 +194,12 @@ export function SinSigil({ sin, size = 16 }: { sin: Sin; size?: number }) {
   const color = SIN_COLOR[sin];
   return (
     <span
-      title={SIN_LABEL[sin]}
+      title={SIN_LABEL_TR[sin]}
       className="inline-flex shrink-0 rotate-45 items-center justify-center"
       style={{
         width: size,
         height: size,
-        background: `${color}22`,
+        background: `${color}26`,
         border: `1.5px solid ${color}`,
         borderRadius: 3,
       }}
@@ -202,7 +208,7 @@ export function SinSigil({ sin, size = 16 }: { sin: Sin; size?: number }) {
         className="-rotate-45 text-[9px] font-bold leading-none"
         style={{ color }}
       >
-        {SIN_LABEL[sin][0]}
+        {SIN_LABEL_TR[sin][0]}
       </span>
     </span>
   );

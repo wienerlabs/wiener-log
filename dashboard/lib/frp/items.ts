@@ -138,11 +138,58 @@ export const SIN_LABEL: Record<Sin, string> = {
 };
 
 export const SIN_COLOR: Record<Sin, string> = {
-  pride: "#f0c040",
-  greed: "#3fb950",
-  lust: "#f85149",
-  envy: "#2ea043",
-  gluttony: "#a371f7",
-  wrath: "#da3633",
-  sloth: "#6e7bd8",
+  pride: "#b0863a",
+  greed: "#4a7a3a",
+  lust: "#b85450",
+  envy: "#3a6a5a",
+  gluttony: "#8a5a9a",
+  wrath: "#b0483f",
+  sloth: "#5f7cb4",
+};
+
+export const SIN_LABEL_TR: Record<Sin, string> = {
+  pride: "Kibir",
+  greed: "Açgözlülük",
+  lust: "Şehvet",
+  envy: "Haset",
+  gluttony: "Oburluk",
+  wrath: "Öfke",
+  sloth: "Tembellik",
+};
+
+const ITEM_NAME_TR: Record<string, string> = {
+  sword: "Demir Kılıç",
+  dagger: "Hançer",
+  bow: "Av Yayı",
+  staff: "Meşe Asa",
+  shield: "Yuvarlak Kalkan",
+  leather_armor: "Deri Zırh",
+  potion_health: "Şifa İksiri",
+  potion_mana: "Mana İksiri",
+  scroll: "Mühürlü Parşömen",
+  torch: "Meşale",
+  key: "Paslı Anahtar",
+  bread: "Yol Ekmeği",
+  ring: "Gümüş Yüzük",
+  gem: "Kan Taşı",
+  gold_pouch: "Altın Kese",
+  sin_pride: "Göklerin Hükmü",
+  sin_greed: "Mülkiyet Zinciri",
+  sin_lust: "Kızıl Serenat",
+  sin_envy: "Yansıyan Yazgı",
+  sin_gluttony: "Ebedi Açlık",
+  sin_wrath: "Felaketin Yumruğu",
+  sin_sloth: "Sonsuz Alacakaranlık Asası",
+};
+
+export function itemNameTr(id: string): string {
+  return ITEM_NAME_TR[id] || ITEM_CATALOG[id]?.name || id;
+}
+
+export const RARITY_TR: Record<Rarity, string> = {
+  common: "sıradan",
+  uncommon: "az bulunur",
+  rare: "nadir",
+  epic: "destansı",
+  legendary: "efsanevi",
 };

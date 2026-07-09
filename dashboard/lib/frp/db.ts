@@ -177,6 +177,24 @@ export async function getRecentTurns(
   return rows.reverse();
 }
 
+export async function restartCampaign(campaignId: number): Promise<void> {
+  await sql`DELETE FROM campaign_turns WHERE campaign_id = ${campaignId}`;
+  await sql`
+    UPDATE characters SET
+      hp_cur = hp_max, mp_cur = mp_max,
+      status_effects = '[]'::jsonb, corruption = '{}'::jsonb,
+      wielded = null, alive = true
+    WHERE campaign_id = ${campaignId}
+  `;
+  await sql`
+    UPDATE campaigns SET
+      status = 'lobby', current_scene = null,
+      state_summary = '{}'::jsonb, current_turn = null,
+      round = 0, encounter = null, updated_at = now()
+    WHERE id = ${campaignId}
+  `;
+}
+
 export async function appendTurn(
   campaignId: number,
   actor: string,

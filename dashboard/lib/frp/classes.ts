@@ -103,3 +103,21 @@ export function classById(id: string): ClassDef | undefined {
 export function raceById(id: string): RaceDef | undefined {
   return RACES.find((r) => r.id === id);
 }
+
+export const CLASS_TR: Record<string, { name: string; blurb: string; ability: string }> = {
+  warrior: { name: "Savaşçı", blurb: "Çelik ve yaralar. Diğerleri kırılınca safı o tutar.", ability: "Kalkan Duvarı" },
+  mage: { name: "Büyücü", blurb: "Dünyanın dikişlerini okur ve söker.", ability: "Arkan Oku" },
+  rogue: { name: "Hırsız", blurb: "Kinli bir gölge ve çok keskin bir yanıt.", ability: "Sırttan Bıçak" },
+  ranger: { name: "Avcı", blurb: "Vahşi doğayı bir kol boyu uzakta tutar, oku hep gergin.", ability: "Nişanlı Atış" },
+  cleric: { name: "Rahip", blurb: "Sönmekte olan bir ışığı, onu yutan yerlere taşır.", ability: "Yara Sarma" },
+  warlock: { name: "Efsuncu", blurb: "Karanlıkta bir pazarlık yaptı. Karanlık makbuzu saklıyor.", ability: "Lanet" },
+};
+
+export const RACE_TR: Record<string, { name: string; blurb: string }> = {
+  human: { name: "İnsan", blurb: "Uyumlu, inatçı, her yerde." },
+  half_elf: { name: "Yarı-elf", blurb: "İki dünyaya ait, hiçbirine güvenilmez." },
+  dwarf: { name: "Cüce", blurb: "Derin kökler, daha derin kinler." },
+  orc: { name: "Ork", blurb: "Önce korkulur, nadiren anlaşılır." },
+  elf: { name: "Elf", blurb: "Uzun hafıza, daha uzun sabır." },
+  tiefling: { name: "Tiefling", blurb: "Damgalı doğar, yarı-suçlanmış." },
+};

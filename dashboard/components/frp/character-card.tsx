@@ -1,6 +1,13 @@
 import { PixelPortrait, PixelBar, PixelSprite, SinSigil } from "@/components/frp/pixel";
-import { itemById, RARITY_COLOR, SIN_COLOR, SIN_LABEL } from "@/lib/frp/items";
-import { classById } from "@/lib/frp/classes";
+import {
+  itemById,
+  itemNameTr,
+  RARITY_COLOR,
+  RARITY_TR,
+  SIN_COLOR,
+  SIN_LABEL_TR,
+} from "@/lib/frp/items";
+import { CLASS_TR, RACE_TR } from "@/lib/frp/classes";
 import type { Character, Sin } from "@/lib/frp/types";
 import { Skull } from "lucide-react";
 
@@ -24,20 +31,25 @@ export function CharacterCard({
   isTurn?: boolean;
   compact?: boolean;
 }) {
-  const cls = classById(c.class);
   const dom = dominantSin(c);
   const dead = !c.alive;
+  const clsTr = CLASS_TR[c.class]?.name || c.class;
+  const raceTr = RACE_TR[c.race]?.name || c.race;
 
   return (
     <div
-      className={`rounded-[14px] border p-3.5 transition-colors ${
-        isTurn
-          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-          : "border-[var(--color-line)] bg-[var(--color-surface)]"
-      } ${dead ? "opacity-55 grayscale" : ""}`}
+      className={`rounded-[14px] border p-3.5 transition-colors ${dead ? "opacity-60 grayscale" : ""}`}
+      style={{
+        borderColor: isTurn ? "var(--frp-accent)" : "var(--frp-line)",
+        background: isTurn ? "var(--frp-accent-soft)" : "var(--frp-surface)",
+        boxShadow: isTurn ? "0 0 0 1px var(--frp-accent)" : undefined,
+      }}
     >
       <div className="flex items-start gap-3">
-        <div className="shrink-0 rounded-[10px] bg-[var(--color-canvas)] p-1 ring-1 ring-[var(--color-ring)]">
+        <div
+          className="shrink-0 rounded-[10px] p-1"
+          style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}
+        >
           <PixelPortrait
             seed={c.portrait_seed}
             cell={compact ? 5 : 7}
@@ -46,38 +58,20 @@ export function CharacterCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[14px] font-semibold text-[var(--color-ink)]">
+            <span className="truncate text-[14px] font-semibold" style={{ color: "var(--frp-ink)" }}>
               {c.name}
             </span>
-            {dead ? (
-              <Skull className="size-[13px] text-[var(--color-faint)]" strokeWidth={2} />
-            ) : null}
+            {dead ? <Skull className="size-[13px]" style={{ color: "var(--frp-faint)" }} strokeWidth={2} /> : null}
           </div>
-          <div className="text-[11px] text-[var(--color-faint)]">
-            @{c.handle} · Lv{c.level} {c.race} {cls?.name || c.class}
+          <div className="text-[11px]" style={{ color: "var(--frp-faint)" }}>
+            @{c.handle} · {c.level}. seviye {raceTr} {clsTr}
           </div>
           <div className="mt-2 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="w-6 shrink-0 text-[9px] font-bold text-[var(--color-faint)]">HP</span>
-              <div className="flex-1">
-                <PixelBar value={c.hp_cur} max={c.hp_max} color="#f85149" seg={compact ? 10 : 14} height={compact ? 8 : 10} />
-              </div>
-              <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-[var(--color-muted)]">
-                {c.hp_cur}/{c.hp_max}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-6 shrink-0 text-[9px] font-bold text-[var(--color-faint)]">MP</span>
-              <div className="flex-1">
-                <PixelBar value={c.mp_cur} max={c.mp_max} color="#2f81f7" seg={compact ? 10 : 14} height={compact ? 8 : 10} />
-              </div>
-              <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-[var(--color-muted)]">
-                {c.mp_cur}/{c.mp_max}
-              </span>
-            </div>
+            <BarRow label="CAN" value={c.hp_cur} max={c.hp_max} color="var(--frp-hp)" compact={compact} />
+            <BarRow label="MANA" value={c.mp_cur} max={c.mp_max} color="var(--frp-mp)" compact={compact} />
             {dom ? (
               <div className="flex items-center gap-2">
-                <span className="w-6 shrink-0"><SinSigil sin={dom.sin} size={13} /></span>
+                <span className="w-8 shrink-0"><SinSigil sin={dom.sin} size={13} /></span>
                 <div className="flex-1">
                   <PixelBar value={dom.value} max={100} color={SIN_COLOR[dom.sin]} seg={compact ? 10 : 14} height={compact ? 8 : 10} />
                 </div>
@@ -99,14 +93,14 @@ export function CharacterCard({
               return (
                 <div
                   key={`${it.id}-${i}`}
-                  title={item ? `${item.name} (${item.rarity})` : it.id}
-                  className="flex size-9 items-center justify-center rounded-[7px] bg-[var(--color-canvas)]"
-                  style={{ border: `1.5px solid ${color}` }}
+                  title={item ? `${itemNameTr(it.id)} (${RARITY_TR[item.rarity]})` : it.id}
+                  className="flex size-9 items-center justify-center rounded-[7px]"
+                  style={{ background: "#00000012", border: `1.5px solid ${color}` }}
                 >
                   {item ? (
                     <PixelSprite name={item.sprite} cell={2} glow={item.rarity === "legendary" ? color : undefined} />
                   ) : (
-                    <span className="text-[8px] text-[var(--color-faint)]">?</span>
+                    <span className="text-[8px]" style={{ color: "var(--frp-faint)" }}>?</span>
                   )}
                 </div>
               );
@@ -115,12 +109,12 @@ export function CharacterCard({
           {(c.status_effects || []).length || c.wielded ? (
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {c.wielded ? (
-                <span className="rounded-full bg-[var(--color-line-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-ink-soft)]">
-                  wielding {itemById(c.wielded)?.name || c.wielded}
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: "var(--frp-line-soft)", color: "var(--frp-ink-soft)" }}>
+                  kuşandığı: {itemNameTr(c.wielded)}
                 </span>
               ) : null}
               {(c.status_effects || []).map((s) => (
-                <span key={s.id} className="rounded-full bg-[var(--color-line-soft)] px-2 py-0.5 text-[10px] text-[var(--color-muted)]">
+                <span key={s.id} className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: "var(--frp-line-soft)", color: "var(--frp-muted)" }}>
                   {s.label}
                 </span>
               ))}
@@ -128,11 +122,37 @@ export function CharacterCard({
           ) : null}
           {dom && dom.value > 0 ? (
             <div className="mt-2 text-[10.5px]" style={{ color: SIN_COLOR[dom.sin] }}>
-              {SIN_LABEL[dom.sin]} takes root.
+              {SIN_LABEL_TR[dom.sin]} kök salıyor.
             </div>
           ) : null}
         </>
       ) : null}
+    </div>
+  );
+}
+
+function BarRow({
+  label,
+  value,
+  max,
+  color,
+  compact,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+  compact: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-8 shrink-0 text-[9px] font-bold" style={{ color: "var(--frp-faint)" }}>{label}</span>
+      <div className="flex-1">
+        <PixelBar value={value} max={max} color={color} seg={compact ? 10 : 14} height={compact ? 8 : 10} />
+      </div>
+      <span className="w-9 shrink-0 text-right text-[10px] tabular-nums" style={{ color: "var(--frp-muted)" }}>
+        {value}/{max}
+      </span>
     </div>
   );
 }

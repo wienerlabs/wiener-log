@@ -12,9 +12,16 @@ function me(s: { handle: string; username: string }): string {
 }
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  lobby: { label: "Gathering", color: "var(--color-muted)", bg: "var(--color-line-soft)" },
-  active: { label: "In play", color: "var(--color-ok)", bg: "var(--color-ok-soft)" },
-  paused: { label: "Paused", color: "var(--color-warn)", bg: "var(--color-warn-soft)" },
+  lobby: { label: "Toplanıyor", color: "var(--color-muted)", bg: "var(--color-line-soft)" },
+  active: { label: "Oyunda", color: "var(--color-ok)", bg: "var(--color-ok-soft)" },
+  paused: { label: "Duraklatıldı", color: "var(--color-warn)", bg: "var(--color-warn-soft)" },
+};
+
+const DIFF: Record<string, string> = {
+  easy: "Kolay",
+  normal: "Normal",
+  hard: "Zor",
+  grim: "Acımasız",
 };
 
 export default async function TavernPage() {
@@ -25,14 +32,14 @@ export default async function TavernPage() {
   return (
     <div className="rise">
       <PageHeader
-        title="Tavern"
-        subtitle="Gather a party, wake a Game Master, and walk into a living world."
+        title="Meyhane"
+        subtitle="Bir takım topla, bir Anlatıcı uyandır ve yaşayan bir dünyaya adım at."
       />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div>
-          <SectionHeader title="Open sagas" action={<span>{campaigns.length}</span>} />
+          <SectionHeader title="Açık efsaneler" action={<span>{campaigns.length}</span>} />
           {campaigns.length === 0 ? (
-            <EmptyState>No sagas yet. Forge the first one.</EmptyState>
+            <EmptyState>Henüz efsane yok. İlkini döv.</EmptyState>
           ) : (
             <div className="flex flex-col gap-3">
               {campaigns.map((c) => {
@@ -48,7 +55,7 @@ export default async function TavernPage() {
                             </span>
                             {c.joined ? (
                               <span className="inline-flex items-center gap-0.5 rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
-                                <Check className="size-[10px]" strokeWidth={3} /> joined
+                                <Check className="size-[10px]" strokeWidth={3} /> katıldın
                               </span>
                             ) : null}
                           </div>
@@ -68,10 +75,10 @@ export default async function TavernPage() {
                           <Users className="size-[13px]" strokeWidth={2} /> {c.party_size}
                         </span>
                         <span className="inline-flex items-center gap-1">
-                          <Swords className="size-[13px]" strokeWidth={2} /> round {c.round}
+                          <Swords className="size-[13px]" strokeWidth={2} /> {c.round}. tur
                         </span>
-                        <span className="capitalize">{c.difficulty}</span>
-                        <span>host @{c.host}</span>
+                        <span>{DIFF[c.difficulty] || c.difficulty}</span>
+                        <span>kurucu @{c.host}</span>
                       </div>
                     </Card>
                   </Link>
@@ -81,7 +88,7 @@ export default async function TavernPage() {
           )}
         </div>
         <div>
-          <SectionHeader title="New saga" />
+          <SectionHeader title="Yeni efsane" />
           <CreateCampaign />
         </div>
       </div>

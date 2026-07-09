@@ -1,5 +1,6 @@
 import { PixelPortrait } from "@/components/frp/pixel";
-import type { Character, Turn } from "@/lib/frp/types";
+import { DiceRoll } from "@/components/frp/dice";
+import type { Character, Turn, HiddenRoll } from "@/lib/frp/types";
 import { Wand2, Skull, Sparkles, Swords } from "lucide-react";
 
 export function Transcript({
@@ -28,15 +29,30 @@ function TurnBlock({
   const actor = characters[t.actor];
 
   if (t.kind === "narration") {
+    const rolls = (t.payload?.rolls as HiddenRoll[] | undefined) || [];
     return (
-      <div className="rise rounded-[14px] border-l-[3px] border-[var(--color-accent)] bg-[var(--color-surface)] p-4 ring-1 ring-[var(--color-ring)]">
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.04em] text-[var(--color-accent)]">
+      <div
+        className="rise rounded-[14px] border-l-[3px] p-4"
+        style={{
+          borderColor: "var(--frp-accent)",
+          background: "var(--frp-raised)",
+          boxShadow: "0 1px 2px #0000000f",
+        }}
+      >
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ color: "var(--frp-accent-ink)" }}>
           <Wand2 className="size-[13px]" strokeWidth={2} />
-          Game Master
+          Anlatıcı
         </div>
-        <div className="whitespace-pre-wrap text-[14px] leading-[1.7] text-[var(--color-ink)]">
+        <div className="whitespace-pre-wrap text-[14px] leading-[1.75]" style={{ color: "var(--frp-ink)" }}>
           {t.content}
         </div>
+        {rolls.length ? (
+          <div className="mt-3 flex flex-wrap items-end gap-3 border-t pt-3" style={{ borderColor: "var(--frp-line)" }}>
+            {rolls.slice(0, 4).map((r, i) => (
+              <DiceRoll key={i} sides={r.die || 20} value={r.result} label={r.label} />
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -44,19 +60,14 @@ function TurnBlock({
   if (t.kind === "action") {
     return (
       <div className="flex items-start gap-2.5 pl-1">
-        <div className="mt-0.5 shrink-0 rounded-[7px] bg-[var(--color-canvas)] p-0.5 ring-1 ring-[var(--color-ring)]">
-          {actor ? (
-            <PixelPortrait seed={actor.portrait_seed} cell={3} />
-          ) : (
-            <div className="size-9" />
-          )}
+        <div className="mt-0.5 shrink-0 rounded-[7px] p-0.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
+          {actor ? <PixelPortrait seed={actor.portrait_seed} cell={3} /> : <div className="size-9" />}
         </div>
         <div className="min-w-0 flex-1">
-          <span className="text-[13px] font-semibold text-[var(--color-ink)]">
+          <span className="text-[13px] font-semibold" style={{ color: "var(--frp-ink)" }}>
             {actor?.name || t.actor}
           </span>
-          <span className="ml-1.5 text-[11px] text-[var(--color-faint)]">acts</span>
-          <div className="text-[13.5px] italic leading-relaxed text-[var(--color-ink-soft)]">
+          <div className="text-[13.5px] italic leading-relaxed" style={{ color: "var(--frp-ink-soft)" }}>
             {t.content}
           </div>
         </div>
@@ -66,9 +77,9 @@ function TurnBlock({
 
   if (t.kind === "talk") {
     return (
-      <div className="pl-1 text-[12.5px] text-[var(--color-muted)]">
-        <span className="font-medium text-[var(--color-ink-soft)]">@{t.actor}</span>
-        <span className="mx-1 text-[var(--color-faint)]">(table)</span>
+      <div className="pl-1 text-[12.5px]" style={{ color: "var(--frp-muted)" }}>
+        <span className="font-medium" style={{ color: "var(--frp-ink-soft)" }}>@{t.actor}</span>
+        <span className="mx-1" style={{ color: "var(--frp-faint)" }}>(masa)</span>
         {t.content}
       </div>
     );
@@ -76,7 +87,7 @@ function TurnBlock({
 
   if (t.kind === "loot") {
     return (
-      <div className="flex items-center justify-center gap-1.5 text-[12px] font-medium text-[var(--color-ok)]">
+      <div className="flex items-center justify-center gap-1.5 text-[12px] font-medium" style={{ color: "#7a5a2a" }}>
         <Sparkles className="size-[13px]" strokeWidth={2} />
         {t.content}
       </div>
@@ -85,7 +96,7 @@ function TurnBlock({
 
   if (t.kind === "transform") {
     return (
-      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] bg-[var(--color-purple-soft)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--color-purple)]">
+      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] px-3.5 py-2 text-[12.5px] font-medium" style={{ background: "#8a5a9a1a", color: "var(--frp-corrupt)" }}>
         <Sparkles className="size-[14px] shrink-0" strokeWidth={2} />
         {t.content}
       </div>
@@ -94,7 +105,7 @@ function TurnBlock({
 
   if (t.kind === "death") {
     return (
-      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] bg-[var(--color-danger-soft)] px-3.5 py-2 text-[12.5px] font-semibold text-[var(--color-danger)]">
+      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold" style={{ background: "var(--frp-danger-soft)", color: "var(--frp-danger)" }}>
         <Skull className="size-[14px] shrink-0" strokeWidth={2} />
         {t.content}
       </div>
@@ -103,7 +114,7 @@ function TurnBlock({
 
   if (t.kind === "combat") {
     return (
-      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] bg-[var(--color-danger-soft)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--color-danger)]">
+      <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[10px] px-3.5 py-2 text-[12.5px] font-medium" style={{ background: "var(--frp-danger-soft)", color: "var(--frp-danger)" }}>
         <Swords className="size-[14px] shrink-0" strokeWidth={2} />
         {t.content}
       </div>
@@ -111,7 +122,7 @@ function TurnBlock({
   }
 
   return (
-    <div className="mx-auto rounded-full bg-[var(--color-line-soft)] px-3 py-1 text-center text-[11.5px] text-[var(--color-faint)]">
+    <div className="mx-auto rounded-full px-3 py-1 text-center text-[11.5px]" style={{ background: "var(--frp-line-soft)", color: "var(--frp-faint)" }}>
       {t.content}
     </div>
   );

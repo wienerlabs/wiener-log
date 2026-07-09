@@ -219,3 +219,53 @@ body {
   height: 0;
   pointer-events: none;
 }
+
+:root {
+  --frp-canvas: #ece2ce;
+  --frp-surface: #f5eedd;
+  --frp-raised: #e6dabf;
+  --frp-ink: #3b3227;
+  --frp-ink-soft: #574b3b;
+  --frp-muted: #6f6250;
+  --frp-faint: #9a8c76;
+  --frp-line: #d8caac;
+  --frp-line-soft: #e4d9c1;
+  --frp-accent: #9c6644;
+  --frp-accent-ink: #7a4f34;
+  --frp-accent-soft: #9c66441f;
+  --frp-hp: #c05f57;
+  --frp-mp: #5a79ad;
+  --frp-xp: #b0863a;
+  --frp-corrupt: #8a5a9a;
+  --frp-track: #d8caac;
+  --frp-danger: #b0483f;
+  --frp-danger-soft: #b0483f1a;
+}
+
+.frp-page {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #f3ead6 0%, var(--frp-canvas) 60%, #e3d7bd 100%);
+  color: var(--frp-ink);
+  border-radius: 18px;
+  border: 1px solid var(--frp-line);
+  padding: 22px;
+  box-shadow: inset 0 1px 0 #fffaf0aa;
+}
+
+@keyframes frp-tumble {
+  0% { transform: rotateX(0deg) rotateY(0deg) scale(0.85); }
+  55% { transform: rotateX(560deg) rotateY(400deg) scale(1.08); }
+  100% { transform: rotateX(720deg) rotateY(540deg) scale(1); }
+}
+@keyframes frp-spin {
+  from { transform: rotateX(0deg) rotateY(0deg); }
+  to { transform: rotateX(360deg) rotateY(360deg); }
+}
+@keyframes frp-bob {
+  0%, 100% { transform: translateY(0) rotate(-9deg); }
+  50% { transform: translateY(-3px) rotate(9deg); }
+}
+.frp-die3d { transform-style: preserve-3d; will-change: transform; }
+.frp-roll { animation: frp-tumble 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.frp-thinking-die { animation: frp-spin 1.4s linear infinite; }
+.frp-bob { animation: frp-bob 1.1s ease-in-out infinite; }
