@@ -40,15 +40,15 @@ export function CreateCampaign() {
   };
 
   const field = {
-    background: "var(--frp-surface)",
-    border: "1px solid var(--frp-line)",
-    color: "var(--frp-ink)",
+    background: "var(--color-canvas)",
+    border: "1px solid var(--color-line)",
+    color: "var(--color-ink)",
   } as const;
 
   return (
-    <div className="frp-page">
-      <div className="mb-3 flex items-center gap-2 text-[14px] font-semibold" style={{ color: "var(--frp-ink)" }}>
-        <Sparkles className="size-[16px]" style={{ color: "var(--frp-accent)" }} strokeWidth={2} />
+    <div className="rounded-[16px] p-5" style={{ background: "var(--color-surface)", border: "1px solid var(--color-line)" }}>
+      <div className="mb-3 flex items-center gap-2 text-[14px] font-semibold" style={{ color: "var(--color-ink)" }}>
+        <Sparkles className="size-[16px]" style={{ color: "var(--color-accent)" }} strokeWidth={2} />
         Yeni bir efsane döv
       </div>
       <div className="flex flex-col gap-2.5">
@@ -82,9 +82,9 @@ export function CreateCampaign() {
               onClick={() => setDifficulty(d.id)}
               className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors"
               style={{
-                background: difficulty === d.id ? "var(--frp-accent)" : "var(--frp-surface)",
-                color: difficulty === d.id ? "#fff" : "var(--frp-muted)",
-                border: "1px solid var(--frp-line)",
+                background: difficulty === d.id ? "var(--color-accent)" : "var(--color-canvas)",
+                color: difficulty === d.id ? "#fff" : "var(--color-muted)",
+                border: "1px solid var(--color-line)",
               }}
             >
               {d.label}
@@ -102,16 +102,16 @@ export function CreateCampaign() {
               onClick={() => setModel(m.id)}
               className="rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-colors"
               style={{
-                background: model === m.id ? "var(--frp-accent)" : "var(--frp-surface)",
-                color: model === m.id ? "#fff" : "var(--frp-muted)",
-                border: "1px solid var(--frp-line)",
+                background: model === m.id ? "var(--color-accent)" : "var(--color-canvas)",
+                color: model === m.id ? "#fff" : "var(--color-muted)",
+                border: "1px solid var(--color-line)",
               }}
             >
               {m.label}
             </button>
           ))}
         </div>
-        <div className="-mt-1 text-[10.5px]" style={{ color: "var(--frp-faint)" }}>
+        <div className="-mt-1 text-[10.5px]" style={{ color: "var(--color-faint)" }}>
           Hızlı: kısa, çabuk turlar. Sinematik: daha zengin ama yavaş anlatım.
         </div>
         <button
@@ -119,7 +119,7 @@ export function CreateCampaign() {
           onClick={create}
           disabled={busy || !title.trim()}
           className="mt-1 rounded-[11px] px-4 py-2.5 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-          style={{ background: "var(--frp-accent)" }}
+          style={{ background: "var(--color-accent)" }}
         >
           {busy ? "Dövülüyor..." : "Efsaneyi yarat"}
         </button>
