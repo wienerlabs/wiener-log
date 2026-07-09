@@ -9,18 +9,21 @@ import {
   FolderGit2,
   Users,
   Radio,
+  Boxes,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Overview", icon: LayoutGrid },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
-  { href: "/workspaces", label: "Workspaces", icon: FolderGit2 },
   { href: "/members", label: "Members", icon: Users },
+  { href: "/workspaces", label: "Workspaces", icon: FolderGit2 },
+  { href: "/repos", label: "Repositories", icon: Boxes },
   { href: "/events", label: "Events", icon: Radio },
 ];
 
-export function Sidebar() {
+export function Sidebar({ logoutAction }: { logoutAction?: () => void }) {
   const path = usePathname();
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-[248px] flex-col border-r border-[var(--color-line)] bg-white/70 px-4 py-6 backdrop-blur-xl lg:flex">
@@ -88,6 +91,18 @@ export function Sidebar() {
           Neon + ingest + engine
         </div>
       </div>
+
+      {logoutAction ? (
+        <form action={logoutAction} className="mt-2">
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13px] font-medium text-[var(--color-muted)] transition-colors hover:bg-[var(--color-line-soft)] hover:text-[var(--color-danger)]"
+          >
+            <LogOut className="size-[16px]" strokeWidth={2} />
+            Sign out
+          </button>
+        </form>
+      ) : null}
     </aside>
   );
 }

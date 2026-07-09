@@ -255,17 +255,177 @@ export async function getWorkspace(slug: string): Promise<WorkspaceRow | null> {
 
 export interface MemberRow {
   handle: string;
+  avatar_url: string | null;
+  orgs: string[];
   email: string | null;
-  workspace_slug: string;
-  created_at: string;
   tasks: number;
+  events: number;
+  created_at: string | null;
 }
 
-export async function getMembers(): Promise<MemberRow[]> {
+export async function getMembers(org?: string): Promise<MemberRow[]> {
+  const rows = org
+    ? ((await sql`
+        SELECT mo.handle,
+          max(mo.avatar_url) AS avatar_url,
+          array_agg(DISTINCT allo.org ORDER BY allo.org) AS orgs,
+          (SELECT u.email FROM users u JOIN workspaces w ON w.id = u.workspace_id
+             WHERE w.slug = mo.handle LIMIT 1) AS email,
+          (SELECT count(*)::int FROM tasks t JOIN users u ON u.id = t.owner_user_id
+             JOIN workspaces w ON w.id = u.workspace_id WHERE w.slug = mo.handle) AS tasks,
+          (SELECT count(*)::int FROM events e JOIN workspaces w ON w.id = e.workspace_id
+             WHERE w.slug = mo.handle) AS events,
+          (SELECT min(u.created_at) FROM users u JOIN workspaces w ON w.id = u.workspace_id
+             WHERE w.slug = mo.handle) AS created_at
+        FROM member_orgs mo
+        JOIN member_orgs allo ON allo.handle = mo.handle
+        WHERE mo.org = ${org}
+        GROUP BY mo.handle
+        ORDER BY events DESC, mo.handle ASC
+      `) as MemberRow[])
+    : ((await sql`
+        SELECT mo.handle,
+          max(mo.avatar_url) AS avatar_url,
+          array_agg(DISTINCT mo.org ORDER BY mo.org) AS orgs,
+          (SELECT u.email FROM users u JOIN workspaces w ON w.id = u.workspace_id
+             WHERE w.slug = mo.handle LIMIT 1) AS email,
+          (SELECT count(*)::int FROM tasks t JOIN users u ON u.id = t.owner_user_id
+             JOIN workspaces w ON w.id = u.workspace_id WHERE w.slug = mo.handle) AS tasks,
+          (SELECT count(*)::int FROM events e JOIN workspaces w ON w.id = e.workspace_id
+             WHERE w.slug = mo.handle) AS events,
+          (SELECT min(u.created_at) FROM users u JOIN workspaces w ON w.id = u.workspace_id
+             WHERE w.slug = mo.handle) AS created_at
+        FROM member_orgs mo
+        GROUP BY mo.handle
+        ORDER BY events DESC, mo.handle ASC
+      `) as MemberRow[]);
+  return rows;
+}
+
+export interface OrgRow {
+  org: string;
+  members: number;
+}
+
+export async function getOrgs(): Promise<OrgRow[]> {
   return (await sql`
-    SELECT u.handle, u.email, w.slug AS workspace_slug, u.created_at,
-      (SELECT count(*)::int FROM tasks t WHERE t.owner_user_id = u.id) AS tasks
+    SELECT org, count(*)::int AS members
+    FROM member_orgs GROUP BY org ORDER BY members DESC
+  `) as OrgRow[];
+}
+
+export interface MemberDetail {
+  handle: string;
+  avatar_url: string | null;
+  orgs: string[];
+  email: string | null;
+  workspace_slug: string | null;
+  workspace_id: string | null;
+  user_id: string | null;
+  tasks: number;
+  events: number;
+  created_at: string | null;
+}
+
+export async function getMember(handle: string): Promise<MemberDetail | null> {
+  const rows = (await sql`
+    SELECT mo.handle,
+      max(mo.avatar_url) AS avatar_url,
+      array_agg(DISTINCT mo.org ORDER BY mo.org) AS orgs
+    FROM member_orgs mo WHERE mo.handle = ${handle} GROUP BY mo.handle
+  `) as { handle: string; avatar_url: string | null; orgs: string[] }[];
+  if (rows.length === 0) return null;
+  const base = rows[0];
+
+  const u = (await sql`
+    SELECT u.id AS user_id, u.email, w.id AS workspace_id, w.slug AS workspace_slug,
+      u.created_at,
+      (SELECT count(*)::int FROM tasks t WHERE t.owner_user_id = u.id) AS tasks,
+      (SELECT count(*)::int FROM events e WHERE e.workspace_id = w.id) AS events
     FROM users u JOIN workspaces w ON w.id = u.workspace_id
-    ORDER BY u.created_at DESC
-  `) as MemberRow[];
+    WHERE w.slug = ${handle} LIMIT 1
+  `) as {
+    user_id: string;
+    email: string | null;
+    workspace_id: string;
+    workspace_slug: string;
+    created_at: string;
+    tasks: number;
+    events: number;
+  }[];
+  const uu = u[0];
+
+  return {
+    handle: base.handle,
+    avatar_url: base.avatar_url,
+    orgs: base.orgs,
+    email: uu?.email ?? null,
+    workspace_slug: uu?.workspace_slug ?? null,
+    workspace_id: uu?.workspace_id ?? null,
+    user_id: uu?.user_id ?? null,
+    tasks: uu?.tasks ?? 0,
+    events: uu?.events ?? 0,
+    created_at: uu?.created_at ?? null,
+  };
+}
+
+export async function getMemberTasks(handle: string): Promise<TaskRow[]> {
+  return (await sql`
+    SELECT t.id, t.title, t.status, t.node_type::text AS node_type, t.repo,
+           w.slug AS workspace_slug, t.created_at
+    FROM tasks t
+    JOIN users u ON u.id = t.owner_user_id
+    JOIN workspaces w ON w.id = u.workspace_id
+    WHERE w.slug = ${handle}
+    ORDER BY t.created_at DESC LIMIT 100
+  `) as TaskRow[];
+}
+
+export interface RepoRow {
+  repo: string;
+  events: number;
+  last_at: string;
+}
+
+export async function getRepos(): Promise<RepoRow[]> {
+  return (await sql`
+    SELECT payload->>'repository' AS repo,
+      count(*)::int AS events,
+      max(ingested_at) AS last_at
+    FROM events
+    WHERE source = 'github' AND payload->>'repository' IS NOT NULL
+    GROUP BY 1 ORDER BY events DESC
+  `) as RepoRow[];
+}
+
+export interface AssignInput {
+  handle: string;
+  title: string;
+  body?: string;
+  repo?: string;
+}
+
+export async function assignTask(
+  input: AssignInput,
+): Promise<{ ok: boolean; error?: string }> {
+  const title = input.title.trim();
+  if (!title || title.length > 280) {
+    return { ok: false, error: "Title must be 1..280 characters." };
+  }
+  const rows = (await sql`
+    SELECT u.id AS user_id, u.workspace_id
+    FROM users u JOIN workspaces w ON w.id = u.workspace_id
+    WHERE w.slug = ${input.handle} LIMIT 1
+  `) as { user_id: string; workspace_id: string }[];
+  if (rows.length === 0) {
+    return { ok: false, error: "No workspace for this member yet." };
+  }
+  const { user_id, workspace_id } = rows[0];
+  await sql`
+    INSERT INTO tasks (workspace_id, node_type, title, body, repo, owner_user_id, status)
+    VALUES (${workspace_id}, 'intent', ${title},
+            ${input.body?.trim() || null}, ${input.repo?.trim() || null},
+            ${user_id}, 'acked')
+  `;
+  return { ok: true };
 }
