@@ -90,7 +90,7 @@ const CHAR_COLS = `id, campaign_id, handle, name, class, race, level, xp,
 
 export async function getCharacters(campaignId: number): Promise<Character[]> {
   return (await sql`
-    SELECT id, campaign_id, handle, name, class, class2, race, controlled_by,
+    SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
       level, xp, hp_cur, hp_max, mp_cur, mp_max, stats, inventory, status_effects,
       corruption, wielded, abilities, gold, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} ORDER BY id ASC
@@ -102,7 +102,7 @@ export async function getCharacter(
   handle: string,
 ): Promise<Character | null> {
   const rows = (await sql`
-    SELECT id, campaign_id, handle, name, class, class2, race, controlled_by,
+    SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
       level, xp, hp_cur, hp_max, mp_cur, mp_max, stats, inventory, status_effects,
       corruption, wielded, abilities, gold, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} AND handle = ${handle} LIMIT 1
@@ -117,6 +117,7 @@ export async function createCharacter(c: {
   cls: string;
   cls2?: string | null;
   race: string;
+  house?: string | null;
   hp: number;
   mp: number;
   stats: Record<string, number>;
@@ -125,9 +126,9 @@ export async function createCharacter(c: {
   portrait_seed: string;
 }): Promise<void> {
   await sql`
-    INSERT INTO characters (campaign_id, handle, name, class, class2, race,
+    INSERT INTO characters (campaign_id, handle, name, class, class2, race, house,
       hp_cur, hp_max, mp_cur, mp_max, stats, inventory, abilities, portrait_seed, gold)
-    VALUES (${c.campaign_id}, ${c.handle}, ${c.name}, ${c.cls}, ${c.cls2 ?? null}, ${c.race},
+    VALUES (${c.campaign_id}, ${c.handle}, ${c.name}, ${c.cls}, ${c.cls2 ?? null}, ${c.race}, ${c.house ?? null},
       ${c.hp}, ${c.hp}, ${c.mp}, ${c.mp},
       ${JSON.stringify(c.stats)}::jsonb, ${JSON.stringify(c.inventory)}::jsonb,
       ${JSON.stringify(c.abilities)}::jsonb, ${c.portrait_seed}, 25)

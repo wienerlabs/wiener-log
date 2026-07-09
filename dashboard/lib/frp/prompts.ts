@@ -1,6 +1,8 @@
 import type { Campaign, Character, Turn } from "@/lib/frp/types";
 import { ITEM_CATALOG } from "@/lib/frp/items";
+import { houseById } from "@/lib/frp/houses";
 import { poolToPrompt, type DicePool } from "@/lib/frp/dice";
+import { locationsForPrompt } from "@/lib/frp/locations";
 
 export const SYSTEM_PROMPT = `You are the Game Master of a dark-fantasy tabletop RPG played by a party of adventurers over chat. You are a veteran GM who has run grim, living worlds for decades. Your job is not to tell a story to one hero. Your job is to run a living, breathing world that moves with or without the party.
 
@@ -46,8 +48,9 @@ STATE OUTPUT
 - You MUST call the resolve_turn tool. Put prose in narration; put every mechanical change in the structured fields, keyed by character handle. Keep memory_update as a compact but complete cumulative save-file: the key NPCs and their state, locations, active quests, promises, debts, and consequences. Update it each turn so nothing important is forgotten, but keep it lean. Prefer item ids from the provided catalog for loot.
 
 MECHANICS
+- Noble houses: characters may belong to a house (shown in the sheet). Houses are real powers in the world with rivalries, banners, loyalties, and debts. Weave house politics, allies, and enemies into the story; a character's house shapes how NPCs treat them.
 - Some characters carry two classes (shown in the party sheet). Treat them as blending both kits.
-- Dice on important actions: for any consequential action (an attack, a risky feat, a real test), actually use the provided dice pool and report the key roll (die and result) in the rolls field so the table watches it land. Do not narrate the raw number.
+- Dice on important actions: for any consequential action (an attack, a risky feat, a real test), actually use the provided dice pool and report the key roll (die and result) in the rolls field so the table watches it land. Do not narrate the raw number. You already KNOW the result, because the pool is pre-rolled and given to you. In the SAME response, narrate the full consequence of that roll: whether it succeeds, partially succeeds, or fails, and what actually happens as a result. Never end your narration at the moment of the roll or before its outcome; always resolve it and carry the scene to a new, settled situation, then freeze for the next player.
 - Necromancer: a Necromancer can raise the dead. When a necromancer acts to raise a fallen character (ally or foe), set that character's controlled_by to the necromancer's handle in effects. Raised characters fight on as undead minions under the necromancer's command; they no longer take their own turns and belong to the necromancer's will. Only a necromancer can raise the dead.
 
 VOICE
@@ -65,13 +68,15 @@ function sheet(c: Character): string {
   const status =
     (c.status_effects || []).map((s) => s.label).join(", ") || "none";
   const cls = c.class2 ? `${c.class}/${c.class2}` : c.class;
+  const house = c.house ? houseById(c.house)?.name : null;
+  const houseStr = house ? `, House of ${house}` : "";
   const abilities = (c.abilities || []).join(", ") || "none";
   const state = c.controlled_by
     ? `RAISED UNDEAD, controlled by @${c.controlled_by}`
     : c.alive
       ? "alive"
       : "DEAD";
-  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
+  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
 }
 
 export function buildUserPrompt(
@@ -81,6 +86,7 @@ export function buildUserPrompt(
   actorHandle: string,
   action: string,
   pool: DicePool,
+  wild: boolean,
 ): string {
   const memory =
     (campaign.state_summary?.memory as string) || "This is the opening of the campaign.";
@@ -118,8 +124,10 @@ ${log}
 
 VALID ITEM IDS FOR LOOT: ${items}
 
-HIDDEN DICE POOL (do not reveal these numbers): ${poolToPrompt(pool)}
+LOCATION IMAGES: if this scene clearly takes place at one of these, set the location field to its key so the table sees it (otherwise omit it): ${locationsForPrompt()}
 
+HIDDEN DICE POOL (do not reveal these numbers): ${poolToPrompt(pool)}
+${wild ? "\nWILD EVENT: fate turns unexpectedly this turn. Introduce a sudden, unplanned event that complicates or upends the scene: an ambush, a betrayal, a stranger's arrival, a natural disaster, an omen, or a stroke of luck. Weave it into the outcome naturally.\n" : ""}
 It is @${actorHandle}'s turn. Their action:
 "${action}"
 

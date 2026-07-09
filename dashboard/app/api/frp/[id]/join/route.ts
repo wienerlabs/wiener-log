@@ -7,6 +7,7 @@ import {
   updateCampaign,
 } from "@/lib/frp/db";
 import { classById, raceById } from "@/lib/frp/classes";
+import { houseById } from "@/lib/frp/houses";
 import type { Stats } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,9 @@ export async function POST(
     cls2?: string | null;
     race?: string;
     trait?: string;
+    house?: string;
   };
+  const house = body.house ? houseById(String(body.house)) : null;
   const cls = classById(String(body.cls || ""));
   const race = raceById(String(body.race || ""));
   if (!cls || !race)
@@ -77,6 +80,7 @@ export async function POST(
     cls: cls.id,
     cls2: cls2 ? cls2.id : null,
     race: race.id,
+    house: house ? house.id : null,
     hp,
     mp,
     stats: stats as unknown as Record<string, number>,

@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLASSES, RACES, CLASS_TR, RACE_TR } from "@/lib/frp/classes";
+import { HOUSES } from "@/lib/frp/houses";
 import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 
 const TRAITS = ["Cesur", "Kurnaz", "Bilge", "Acımasız", "Sadık", "Karanlık"];
-const STEPS = ["İsim", "Sınıf", "Irk", "Tabiat"];
+const STEPS = ["İsim", "Sınıf", "Irk", "Tabiat", "Hanedan"];
 
 export function JoinPanel({
   id,
@@ -24,6 +25,7 @@ export function JoinPanel({
   const [cls2, setCls2] = useState<string | null>(null);
   const [race, setRace] = useState(RACES[0].id);
   const [trait, setTrait] = useState(TRAITS[0]);
+  const [house, setHouse] = useState(HOUSES[0].id);
   const [busy, setBusy] = useState(false);
   const [seed, setSeed] = useState("kahraman:warrior:human");
 
@@ -45,7 +47,7 @@ export function JoinPanel({
       const res = await fetch(`/api/frp/${id}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait }),
+        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait, house }),
       });
       if (res.ok) router.refresh();
       else setBusy(false);
@@ -71,7 +73,7 @@ export function JoinPanel({
           </div>
           <div className="text-[12px]" style={{ color: "var(--frp-muted)" }}>
             {RACE_TR[race]?.name} {clsTr?.name}
-            {cls2Tr ? ` / ${cls2Tr.name}` : ""} · {trait}
+            {cls2Tr ? ` / ${cls2Tr.name}` : ""} · {trait} · {HOUSES.find((h) => h.id === house)?.name}
           </div>
         </div>
       </div>
@@ -217,6 +219,29 @@ export function JoinPanel({
               </button>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {step === 4 ? (
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {HOUSES.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              onClick={() => setHouse(h.id)}
+              className="flex flex-col items-center rounded-[12px] border p-3 text-center transition-colors"
+              style={{
+                borderColor: house === h.id ? "var(--frp-accent)" : "var(--frp-line)",
+                background: house === h.id ? "var(--frp-accent-soft)" : "var(--frp-canvas)",
+              }}
+            >
+              <div className="rounded-[8px] p-1" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
+                <PixelSprite name={h.sprite} cell={4} />
+              </div>
+              <div className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--frp-ink)" }}>{h.name}</div>
+              <div className="mt-0.5 text-[10px] leading-snug" style={{ color: "var(--frp-muted)" }}>{h.blurb}</div>
+            </button>
+          ))}
         </div>
       ) : null}
 

@@ -8,7 +8,8 @@ import {
   saveCharacter,
 } from "@/lib/frp/db";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/frp/prompts";
-import { rollPool } from "@/lib/frp/dice";
+import { rollPool, rollDie } from "@/lib/frp/dice";
+import { locationByKey } from "@/lib/frp/locations";
 import { SIN_LABEL_TR, itemNameTr } from "@/lib/frp/items";
 import type {
   Character,
@@ -102,6 +103,11 @@ const RESOLVE_TOOL = {
           properties: { handle: { type: "string" }, item: { type: "string" } },
           required: ["handle", "item"],
         },
+      },
+      location: {
+        type: "string",
+        description:
+          "Key of a matching location image if the scene is clearly at one (big_city, outer_gate, courtyard, great_hall, blacksmith, market_square, watchtower); otherwise omit.",
       },
       encounter: {
         type: "object",
@@ -269,8 +275,9 @@ export async function resolveTurn(
   const characters = await getCharacters(campaignId);
   const recent = await getRecentTurns(campaignId, 16);
   const pool = rollPool();
+  const wild = rollDie(100) <= 15;
   const model =
-    process.env.FRP_GM_MODEL || campaign.gm_model || "claude-sonnet-4-5";
+    process.env.FRP_GM_MODEL || campaign.gm_model || "claude-haiku-4-5";
 
   const userPrompt = buildUserPrompt(
     campaign,
@@ -279,6 +286,7 @@ export async function resolveTurn(
     actorHandle,
     action,
     pool,
+    wild,
   );
   const gm = await callGM(model, userPrompt);
 
@@ -324,12 +332,13 @@ export async function resolveTurn(
 
   const narration = noDash(gm.narration || "");
   const rolls = gm.rolls || [];
+  const location = gm.location && locationByKey(gm.location) ? gm.location : null;
   await appendTurn(
     campaignId,
     "gm",
     "narration",
     narration,
-    { rolls, dice: pool, loot: gm.loot || [] },
+    { rolls, dice: pool, loot: gm.loot || [], location },
     campaign.round,
   );
   for (const lt of gm.loot || []) {

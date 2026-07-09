@@ -1,5 +1,6 @@
 import { PixelPortrait } from "@/components/frp/pixel";
 import { DiceRoll } from "@/components/frp/dice";
+import { locationByKey } from "@/lib/frp/locations";
 import type { Character, Turn, HiddenRoll } from "@/lib/frp/types";
 import { Wand2, Skull, Sparkles, Swords } from "lucide-react";
 
@@ -30,6 +31,8 @@ function TurnBlock({
 
   if (t.kind === "narration") {
     const rolls = (t.payload?.rolls as HiddenRoll[] | undefined) || [];
+    const locKey = (t.payload?.location as string | undefined) || null;
+    const loc = locKey ? locationByKey(locKey) : null;
     return (
       <div
         className="rise rounded-[14px] border-l-[3px] p-4"
@@ -43,6 +46,22 @@ function TurnBlock({
           <Wand2 className="size-[13px]" strokeWidth={2} />
           Anlatıcı
         </div>
+        {loc ? (
+          <figure
+            className={`mb-3 overflow-hidden rounded-[10px] ${loc.big ? "" : "float-right ml-3"}`}
+            style={{
+              border: "1px solid var(--frp-line)",
+              maxWidth: loc.big ? 440 : 156,
+              width: loc.big ? "100%" : undefined,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/frp/loc/${loc.key}.png`} alt={loc.tr} className="block w-full" />
+            <figcaption className="px-2 py-1 text-[10px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-muted)" }}>
+              {loc.tr}
+            </figcaption>
+          </figure>
+        ) : null}
         <div className="whitespace-pre-wrap text-[14px] leading-[1.75]" style={{ color: "var(--frp-ink)" }}>
           {t.content}
         </div>

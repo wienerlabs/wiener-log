@@ -39,6 +39,7 @@ export interface Character {
   class: string;
   class2: string | null;
   race: string;
+  house: string | null;
   controlled_by: string | null;
   level: number;
   xp: number;
@@ -142,5 +143,6 @@ export interface GMResult {
   memory_update?: string;
   encounter?: Encounter | null;
   loot?: { handle: string; item: string }[];
+  location?: string;
   next_turn?: string;
 }

@@ -9,6 +9,7 @@ import {
   SIN_LABEL_TR,
 } from "@/lib/frp/items";
 import { CLASS_TR, RACE_TR } from "@/lib/frp/classes";
+import { houseById } from "@/lib/frp/houses";
 import type { Character, Sin } from "@/lib/frp/types";
 import { Skull } from "lucide-react";
 
@@ -74,6 +75,14 @@ export function CharacterCard({
           {raised ? (
             <div className="mt-0.5 text-[10px] font-medium" style={{ color: "var(--frp-corrupt)" }}>
               ☠ @{c.controlled_by} tarafından diriltildi
+            </div>
+          ) : null}
+          {c.house && houseById(c.house) ? (
+            <div className="mt-1 flex items-center gap-1.5">
+              <PixelSprite name={houseById(c.house)!.sprite} cell={2} />
+              <span className="text-[10.5px]" style={{ color: "var(--frp-muted)" }}>
+                {houseById(c.house)!.name} Hanedanı
+              </span>
             </div>
           ) : null}
           <div className="mt-2 space-y-1.5">

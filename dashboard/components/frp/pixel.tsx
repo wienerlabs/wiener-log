@@ -71,12 +71,22 @@ const HAIRS = ["#2a1c12", "#4a3218", "#6e4b2a", "#8b7355", "#c79a45", "#a8433a",
 const EYES = ["#3a5a8a", "#3f7a4a", "#6e4b2a", "#2a2020", "#7a4a8a"];
 const RACE_SKIN: Record<string, string[]> = {
   human: ["#d7a583", "#c68642", "#9c6b47", "#e8b98f"],
-  half_elf: ["#e0b48a", "#d7a583", "#c99a6f"],
-  elf: ["#e6cbb0", "#d9b48f", "#efd8c0"],
-  dwarf: ["#cf9968", "#b8895a", "#e0a878"],
-  orc: ["#6f8f43", "#7fa050", "#5f7d3a"],
-  goblin: ["#79a047", "#8cb257", "#6a923c"],
-  tiefling: ["#b45a52", "#c56a5f", "#9c463f"],
+  half_elf: ["#e6c39a", "#d7a583", "#c99a6f"],
+  elf: ["#efdcc8", "#e6cbb0", "#f4e8da"],
+  dwarf: ["#d6996a", "#c78a58", "#e2a878"],
+  orc: ["#5c8036", "#6a9440", "#4e7030"],
+  goblin: ["#88ad3e", "#9abd52", "#77a033"],
+  tiefling: ["#c8443c", "#d6564c", "#ad342e"],
+};
+const RACE_HAIR: Record<string, string[]> = {
+  orc: ["#1c1610", "#2a2018", "#3a2a1a"],
+  goblin: ["#22180f", "#331f12", "#2a2018"],
+  tiefling: ["#1a1010", "#3a1414", "#5a1a1a"],
+};
+const RACE_EYE: Record<string, string> = {
+  orc: "#d1b13a",
+  goblin: "#d1b13a",
+  tiefling: "#f0c040",
 };
 
 function buildPortrait(
@@ -94,8 +104,11 @@ function buildPortrait(
       arr && arr.length ? arr[(hs >>> shift) % arr.length] : "#c98d6a";
     const skins = RACE_SKIN[race || "human"] || RACE_SKIN.human;
     const skin = pick(skins, 0);
-    const hair = pick(HAIRS, 3);
-    const eye = sin ? SIN_COLOR[sin] || "#2a2020" : pick(EYES, 7);
+    const hairArr = (race && RACE_HAIR[race]) || HAIRS;
+    const hair = pick(hairArr, 3);
+    const eye = sin
+      ? SIN_COLOR[sin] || "#2a2020"
+      : (race && RACE_EYE[race]) || pick(EYES, 7);
     const beard = ((hs >>> 11) & 1) === 1 || race === "dwarf";
     const style = (hs >>> 13) % 3;
     const dark = shade(skin, -26);
@@ -118,30 +131,36 @@ function buildPortrait(
     g[8][6] = "#7a4a3a";
 
     if (race === "elf" || race === "half_elf") {
-      g[4][2] = hair;
-      g[5][2] = skin;
-      g[6][2] = skin;
-      g[4][9] = hair;
-      g[5][9] = skin;
-      g[6][9] = skin;
+      g[3][2] = skin;
+      g[4][2] = skin;
+      g[5][2] = dark;
+      g[3][9] = skin;
+      g[4][9] = skin;
+      g[5][9] = dark;
     }
     if (race === "goblin") {
-      g[3][1] = dark;
+      g[3][1] = skin;
       g[4][1] = skin;
-      g[5][1] = skin;
-      g[3][10] = dark;
+      g[5][1] = dark;
+      g[3][2] = skin;
+      g[4][2] = skin;
+      g[3][10] = skin;
       g[4][10] = skin;
-      g[5][10] = skin;
+      g[5][10] = dark;
+      g[3][9] = skin;
+      g[4][9] = skin;
     }
     if (race === "tiefling") {
-      g[0][2] = "#2a1414";
-      g[1][2] = "#4a2420";
-      g[0][9] = "#2a1414";
-      g[1][9] = "#4a2420";
+      g[0][3] = "#241012";
+      g[1][3] = "#4a1c1c";
+      g[0][8] = "#241012";
+      g[1][8] = "#4a1c1c";
     }
     if (race === "orc" || race === "goblin") {
-      g[9][4] = "#eef0f4";
-      g[9][7] = "#eef0f4";
+      g[9][4] = "#f2f2f6";
+      g[9][7] = "#f2f2f6";
+      g[8][4] = "#dfe0e6";
+      g[8][7] = "#dfe0e6";
     }
     if (beard) {
       for (let y = 7; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;

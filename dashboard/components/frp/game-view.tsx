@@ -42,6 +42,7 @@ export function GameView({
   const [thinking, setThinking] = useState(false);
   const lastId = useRef(initialTurns.reduce((m, t) => Math.max(m, t.id), 0));
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
 
   const isMyTurn = campaign.status === "active" && campaign.current_turn === me;
   const myChar = characters.find((c) => c.handle === me);
@@ -80,7 +81,8 @@ export function GameView({
   }, [id]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollBoxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns.length, thinking]);
 
   const submit = async () => {
@@ -175,7 +177,7 @@ export function GameView({
           </div>
         ) : null}
 
-        <div className="rounded-[16px] p-4 sm:p-5" style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}>
+        <div ref={scrollBoxRef} className="max-h-[64vh] overflow-y-auto rounded-[16px] p-4 sm:p-5" style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}>
           {turns.length === 0 ? (
             <div className="py-16 text-center text-[13px]" style={{ color: "var(--frp-faint)" }}>
               Hikâye henüz başlamadı. Anlatıcı dünyayı açacak.
@@ -257,7 +259,7 @@ export function GameView({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
         {isHost ? (
           <div className="flex flex-wrap gap-1.5 rounded-[12px] p-2" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
             {campaign.status === "lobby" ? (
