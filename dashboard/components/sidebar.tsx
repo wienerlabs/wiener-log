@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid,
@@ -24,8 +25,15 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-[248px] flex-col border-r border-[var(--color-line)] bg-white/70 px-4 py-6 backdrop-blur-xl lg:flex">
       <Link href="/" className="mb-8 flex items-center gap-2.5 px-2">
-        <span className="flex size-8 items-center justify-center rounded-[10px] bg-[var(--color-ink)] text-[13px] font-bold text-white">
-          W
+        <span className="flex size-8 items-center justify-center rounded-[10px] bg-[var(--color-ink)]">
+          <Image
+            src="/wiener-logo-white.png"
+            alt="Wiener Labs"
+            width={40}
+            height={28}
+            className="h-[13px] w-auto"
+            priority
+          />
         </span>
         <div className="leading-none">
           <div className="text-[14px] font-semibold tracking-[-0.01em] text-[var(--color-ink)]">
@@ -87,8 +95,15 @@ export function Sidebar() {
 export function MobileTopBar() {
   return (
     <div className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-[var(--color-line)] bg-white/80 px-5 py-3.5 backdrop-blur-xl lg:hidden">
-      <span className="flex size-7 items-center justify-center rounded-[9px] bg-[var(--color-ink)] text-[12px] font-bold text-white">
-        W
+      <span className="flex size-7 items-center justify-center rounded-[9px] bg-[var(--color-ink)]">
+        <Image
+          src="/wiener-logo-white.png"
+          alt="Wiener Labs"
+          width={40}
+          height={28}
+          className="h-[11px] w-auto"
+          priority
+        />
       </span>
       <span className="text-[14px] font-semibold tracking-[-0.01em]">
         WienerLog
