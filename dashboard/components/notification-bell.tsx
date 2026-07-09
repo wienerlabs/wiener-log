@@ -21,6 +21,7 @@ function label(n: Notif): string {
   if (n.kind === "mention") return `@${n.actor} mentioned you`;
   if (n.kind === "task") return `@${n.actor} assigned you a task`;
   if (n.kind === "announcement") return "New announcement";
+  if (n.kind === "frp_turn") return n.body || "Your turn in a saga";
   return n.kind;
 }
 

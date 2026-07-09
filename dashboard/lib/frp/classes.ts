@@ -1,0 +1,105 @@
+import type { Stats } from "@/lib/frp/types";
+
+export interface ClassDef {
+  id: string;
+  name: string;
+  blurb: string;
+  sprite: string;
+  hp: number;
+  mp: number;
+  stats: Stats;
+  items: string[];
+  ability: string;
+}
+
+export const CLASSES: ClassDef[] = [
+  {
+    id: "warrior",
+    name: "Warrior",
+    blurb: "Steel and scars. Holds the line when others break.",
+    sprite: "cls_warrior",
+    hp: 34,
+    mp: 6,
+    stats: { str: 15, dex: 11, con: 14, int: 8, wis: 10, cha: 10 },
+    items: ["sword", "shield", "potion_health", "bread"],
+    ability: "Shield Wall",
+  },
+  {
+    id: "mage",
+    name: "Mage",
+    blurb: "Reads the seams of the world and pulls them apart.",
+    sprite: "cls_mage",
+    hp: 20,
+    mp: 22,
+    stats: { str: 8, dex: 10, con: 10, int: 16, wis: 13, cha: 11 },
+    items: ["staff", "scroll", "potion_mana", "torch"],
+    ability: "Arcane Bolt",
+  },
+  {
+    id: "rogue",
+    name: "Rogue",
+    blurb: "A shadow with a grudge and a very sharp answer.",
+    sprite: "cls_rogue",
+    hp: 24,
+    mp: 10,
+    stats: { str: 10, dex: 16, con: 11, int: 12, wis: 10, cha: 13 },
+    items: ["dagger", "dagger", "potion_health", "key"],
+    ability: "Backstab",
+  },
+  {
+    id: "ranger",
+    name: "Ranger",
+    blurb: "Keeps the wilds at arm's length, arrow already nocked.",
+    sprite: "cls_ranger",
+    hp: 26,
+    mp: 12,
+    stats: { str: 11, dex: 15, con: 12, int: 10, wis: 13, cha: 9 },
+    items: ["bow", "dagger", "potion_health", "bread"],
+    ability: "Aimed Shot",
+  },
+  {
+    id: "cleric",
+    name: "Cleric",
+    blurb: "Carries a fading light into places that swallow it.",
+    sprite: "cls_cleric",
+    hp: 28,
+    mp: 18,
+    stats: { str: 12, dex: 9, con: 13, int: 11, wis: 16, cha: 12 },
+    items: ["staff", "shield", "potion_health", "scroll"],
+    ability: "Mend Wounds",
+  },
+  {
+    id: "warlock",
+    name: "Warlock",
+    blurb: "Made a bargain in the dark. The dark keeps the receipt.",
+    sprite: "cls_warlock",
+    hp: 22,
+    mp: 20,
+    stats: { str: 9, dex: 11, con: 11, int: 15, wis: 10, cha: 15 },
+    items: ["staff", "gem", "potion_mana", "ring"],
+    ability: "Hex",
+  },
+];
+
+export interface RaceDef {
+  id: string;
+  name: string;
+  blurb: string;
+  mods: Partial<Stats>;
+}
+
+export const RACES: RaceDef[] = [
+  { id: "human", name: "Human", blurb: "Adaptable, stubborn, everywhere.", mods: { str: 1, cha: 1 } },
+  { id: "half_elf", name: "Half-elf", blurb: "Belongs to two worlds, trusted by neither.", mods: { dex: 1, cha: 1 } },
+  { id: "dwarf", name: "Dwarf", blurb: "Deep roots, deeper grudges.", mods: { con: 2 } },
+  { id: "orc", name: "Orc", blurb: "Feared first, understood rarely.", mods: { str: 2 } },
+  { id: "elf", name: "Elf", blurb: "Long memory, longer patience.", mods: { dex: 1, int: 1 } },
+  { id: "tiefling", name: "Tiefling", blurb: "Born marked, already half-accused.", mods: { int: 1, cha: 1 } },
+];
+
+export function classById(id: string): ClassDef | undefined {
+  return CLASSES.find((c) => c.id === id);
+}
+export function raceById(id: string): RaceDef | undefined {
+  return RACES.find((r) => r.id === id);
+}
