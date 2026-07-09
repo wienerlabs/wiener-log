@@ -195,7 +195,14 @@ export interface GMResult {
   captures?: { node: string; house: string }[];
   impossible?: boolean;
   reason?: string;
-  acting?: { mp_delta?: number; hp_delta?: number; moved_to?: string };
+  acting?: {
+    mp_delta?: number;
+    hp_delta?: number;
+    gold_delta?: number;
+    found_items?: string[];
+    moved_to?: string;
+  };
+  scene_event?: string;
   next_turn?: string;
 }
 

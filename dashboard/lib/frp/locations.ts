@@ -27,6 +27,20 @@ export const LOCATIONS: LocationDef[] = [
     hint: "a vast army under blood-red banners crowned in gold, a mounted king leading it out from the capital toward another house's lands for war",
     big: true,
   },
+  {
+    key: "kara_kuzgun_yagma",
+    tr: "Kara Kuzgun Bir Şehri Yağmalıyor",
+    en: "the Raven army sacking a burning city",
+    hint: "the Kara Kuzgun (Raven) host under black raven banners storming and burning a city, a crowned rider raising his sword amid the sack",
+    big: true,
+  },
+  {
+    key: "yesil_yilan_yenik",
+    tr: "Yeşil Yılan Ordusu Bozguna Uğradı",
+    en: "the Serpent army routed, a great beast in the square",
+    hint: "a plaza strewn with fallen Yeşil Yılan (Serpent) soldiers under green banners, a colossal chained serpent-beast risen at its center",
+    big: true,
+  },
 ];
 
 export function locationByKey(k: string): LocationDef | undefined {

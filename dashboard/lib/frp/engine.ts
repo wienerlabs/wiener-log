@@ -13,6 +13,7 @@ import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
 import { SIN_LABEL_TR, itemNameTr, itemById, addToInventory, removeFromInventory, stackInventory } from "@/lib/frp/items";
 import { addWorldEvent, listWorldEvents, driftFactions } from "@/lib/frp/world";
+import { sceneEvent } from "@/lib/frp/scenes";
 import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
 import type {
@@ -223,7 +224,7 @@ const RESOLVE_TOOL = {
       },
       acting: {
         type: "object",
-        description: "What happens to the ACTING character THIS turn. You MUST fill this every turn for the character whose turn it is. This is the authoritative record of their mana, health, and movement; do not put the acting character's mp/hp in effects as well.",
+        description: "What happens to the ACTING character THIS turn. You MUST fill this every turn for the character whose turn it is. This is the authoritative record of their mana, health, coin, items found, and movement; do not also put these same changes in effects/loot.",
         properties: {
           mp_delta: {
             type: "number",
@@ -233,17 +234,31 @@ const RESOLVE_TOOL = {
             type: "number",
             description: "health change for the acting character this turn: negative when hurt, positive when healed, 0 if unchanged. At 0 HP they die.",
           },
+          gold_delta: {
+            type: "number",
+            description: "EXACT coin the acting character gains (positive) or spends/loses (negative) this turn, in COPPER (100 copper = 1 gold, 10 copper = 1 silver). If they find, loot, are paid, or take ANY coin, put the exact number here (never say 'a few coins' in prose without a matching number here). 0 if none. They cannot spend coin they do not have.",
+          },
+          found_items: {
+            type: "array",
+            items: { type: "string" },
+            description: "item ids the acting character picks up, loots, is handed, or finds this turn (they go into their inventory). Use exact ids from the catalog. Empty if none. Do not list items they already carry.",
+          },
           moved_to: {
             type: "string",
             description: "map node key the acting character walked/rode to this turn if their action moved them to an ADJACENT place; empty if they stayed. Moves ONLY the acting character, never anyone else.",
           },
         },
-        required: ["mp_delta", "hp_delta"],
+        required: ["mp_delta", "hp_delta", "gold_delta"],
       },
       location: {
         type: "string",
         description:
           "Key of a matching location image if the scene is clearly at one (big_city, outer_gate, courtyard, great_hall, blacksmith, market_square, watchtower); otherwise omit.",
+      },
+      scene_event: {
+        type: "string",
+        description:
+          "Set ONLY when a grand war-scene actually happens in the story, to show its full illustration and shift the map and world. Options: kanli_tac_ordu (the Kanlı Taç host marches out from the capital to war), kara_kuzgun_yagma (the Kara Kuzgun host storms and sacks the CITY the party is currently in, so that city falls to Kara Kuzgun), yesil_yilan_yenik (the Yeşil Yılan army is routed in a plaza and a colossal beast rises from the wreckage). Use rarely, only when the story earns it. Omit otherwise.",
       },
       fire: {
         type: "boolean",
@@ -536,6 +551,7 @@ export async function resolveTurn(
 
   const actorMpBefore = actor?.mp_cur ?? 0;
   const actorHpBefore = actor?.hp_cur ?? 0;
+  const actorGoldBefore = actor?.gold ?? 0;
 
   for (const e of gm.effects || []) {
     const c = byHandle.get(e.handle);
@@ -571,6 +587,8 @@ export async function resolveTurn(
         extraTurns.push({ kind: "death", actor: actor.handle, content: `${actor.name} düştü. Hikâyesi burada bitti.` });
       }
     }
+    const gd = Number(gm.acting.gold_delta) || 0;
+    if (gd && actor.gold === actorGoldBefore) actor.gold = Math.max(0, actor.gold + gd);
   }
 
   if (actor && actor.alive && !opts.isOpening) {
@@ -599,7 +617,13 @@ export async function resolveTurn(
   if (moveTarget && actor) actor.location = moveTarget;
 
   const lootReveals: { handle: string; item: string; rarity: string }[] = [];
-  for (const lt of gm.loot || []) {
+  const allLoot: { handle: string; item: string; rarity?: string }[] = [
+    ...(gm.loot || []),
+    ...(actor && Array.isArray(gm.acting?.found_items)
+      ? gm.acting!.found_items.map((item) => ({ handle: actor.handle, item }))
+      : []),
+  ];
+  for (const lt of allLoot) {
     const c = byHandle.get(lt.handle);
     if (!c || !lt.item) continue;
     if (hadBefore.get(lt.handle)?.has(lt.item)) continue;
@@ -628,7 +652,13 @@ export async function resolveTurn(
 
   const narration = noDash(gm.narration || "");
   const rolls = gm.rolls || [];
-  const location = gm.location && locationByKey(gm.location) ? gm.location : null;
+  const scene = sceneEvent(gm.scene_event);
+  const location =
+    scene && locationByKey(scene.image)
+      ? scene.image
+      : gm.location && locationByKey(gm.location)
+        ? gm.location
+        : null;
   const fire =
     !!gm.fire ||
     /(yan[ıi]yor|yang[ıi]n|alev|tutu[şs]|ate[şs]e ver|k[üu]l ol|yak[ıi]l|cehennem)/i.test(
@@ -747,6 +777,21 @@ export async function resolveTurn(
   if (bossFell) worldEventQueue.push({ kind: "boss", text: `${campaign.encounter!.name} düştü. Yankısı tüm kıtada duyuldu.`, house: null });
   if (gm.world_event && String(gm.world_event).trim())
     worldEventQueue.push({ kind: "gm", text: noDash(String(gm.world_event)).slice(0, 160), house: null });
+
+  if (scene) {
+    if (scene.doom) doom += scene.doom;
+    if (scene.factionDelta)
+      for (const [k, v] of Object.entries(scene.factionDelta))
+        if (houseById(k)) factions[k] = clamp((factions[k] ?? 50) + v, 0, 100);
+    if (scene.captureCurrent && actor?.location && houseById(scene.captureCurrent))
+      nodeControl[actor.location] = scene.captureCurrent;
+    const nodeName = actor?.location ? nodeByKey(actor.location)?.name || "" : "";
+    worldEventQueue.push({
+      kind: scene.captureCurrent ? "capture" : "war",
+      text: scene.news.replace("{node}", nodeName),
+      house: scene.captureCurrent || Object.keys(scene.factionDelta || {})[0] || null,
+    });
+  }
 
   if (!opts.isOpening && (pool.d12[0] ?? 12) <= 4) {
     const drift = driftFactions(factions, (pool.d20[0] || 1) + (pool.d10[0] || 1) * 20);
