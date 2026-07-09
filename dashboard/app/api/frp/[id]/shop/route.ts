@@ -106,5 +106,27 @@ export async function POST(
     return Response.json({ ok: true, gold: ch.gold });
   }
 
+  if (body.op === "mint") {
+    if (!market) return Response.json({ error: "burada sarraf yok" }, { status: 400 });
+    if ((ch.gold || 0) < 100)
+      return Response.json({ error: "en az 100 bakır gerek" }, { status: 400 });
+    ch.gold -= 100;
+    ch.inventory = addToInventory(ch.inventory, "gold_pouch");
+    await saveCharacter(ch);
+    await appendTurn(campaignId, "system", "system", `${ch.name}, 100 bakırı bir altın keseye çevirdi.`, null, campaign.round);
+    return Response.json({ ok: true, gold: ch.gold });
+  }
+
+  if (body.op === "melt") {
+    const owned = stackInventory(ch.inventory).find((it) => it.id === "gold_pouch");
+    if (!owned || (owned.qty ?? 0) <= 0)
+      return Response.json({ error: "bozdurulacak kese yok" }, { status: 400 });
+    ch.inventory = removeFromInventory(ch.inventory, "gold_pouch", 1);
+    ch.gold = (ch.gold || 0) + 100;
+    await saveCharacter(ch);
+    await appendTurn(campaignId, "system", "system", `${ch.name}, bir altın keseyi 100 bakıra bozdurdu.`, null, campaign.round);
+    return Response.json({ ok: true, gold: ch.gold });
+  }
+
   return Response.json({ error: "bilinmeyen işlem" }, { status: 400 });
 }

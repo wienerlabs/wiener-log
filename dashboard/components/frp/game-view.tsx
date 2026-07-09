@@ -8,6 +8,7 @@ import { ThinkingDice } from "@/components/frp/dice";
 import { FireOverlay } from "@/components/frp/fire-overlay";
 import { WorldHud } from "@/components/frp/world-hud";
 import { ShopPanel } from "@/components/frp/shop-panel";
+import { itemNameTr } from "@/lib/frp/items";
 import type { Campaign, Character, Turn, WorldState } from "@/lib/frp/types";
 import {
   SendHorizontal,
@@ -125,6 +126,19 @@ export function GameView({
     }
     setSending(false);
     setThinking(false);
+  };
+
+  const wield = async (item: string) => {
+    try {
+      await fetch(`/api/frp/${id}/wield`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ item }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
   };
 
   const travel = async (nodeKey: string) => {
@@ -255,7 +269,7 @@ export function GameView({
               <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
                 <span className="text-[10px] font-bold tracking-wide" style={{ color: "var(--frp-danger)" }}>SAVAŞ</span>
                 {[
-                  { l: "Saldır", t: "Saldırıyorum" },
+                  { l: "Saldır", t: myChar.wielded ? `${itemNameTr(myChar.wielded)} ile saldırıyorum` : "Saldırıyorum" },
                   { l: "Savun", t: "Kendimi savunuyorum" },
                   { l: "Kaç", t: "Kaçmaya çalışıyorum" },
                 ].map((v) => (
@@ -378,7 +392,13 @@ export function GameView({
         <div className="text-[11px] font-semibold tracking-[0.06em]" style={{ color: "var(--frp-faint)" }}>
           Takım
         </div>
-        {myChar ? <CharacterCard character={myChar} isTurn={campaign.current_turn === me} /> : null}
+        {myChar ? (
+          <CharacterCard
+            character={myChar}
+            isTurn={campaign.current_turn === me}
+            onWield={myChar.alive ? wield : undefined}
+          />
+        ) : null}
         {characters
           .filter((c) => c.handle !== me)
           .map((c) => (

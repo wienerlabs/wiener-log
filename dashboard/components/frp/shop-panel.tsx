@@ -47,7 +47,7 @@ export function ShopPanel({
   const node = position ? WORLD_MAP[position] : undefined;
   const market = isMarket(node?.kind);
   const forge = isForge(node?.kind);
-  const [tab, setTab] = useState<"pazar" | "demirci" | "sat">(market ? "pazar" : "demirci");
+  const [tab, setTab] = useState<"pazar" | "demirci" | "sat" | "takas">(market ? "pazar" : "demirci");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -76,10 +76,13 @@ export function ShopPanel({
     setBusy("");
   };
 
-  const tabs: [string, "pazar" | "demirci" | "sat"][] = [];
+  const tabs: [string, "pazar" | "demirci" | "sat" | "takas"][] = [];
   if (market) tabs.push(["Pazar", "pazar"]);
   if (forge) tabs.push(["Demirci", "demirci"]);
   tabs.push(["Sat", "sat"]);
+  if (market) tabs.push(["Takas", "takas"]);
+
+  const pouches = stackInventory(myChar.inventory || []).find((it) => it.id === "gold_pouch")?.qty ?? 0;
 
   const invSellable = stackInventory(myChar.inventory || []).filter((it) => itemPrice(it.id) > 0);
 
@@ -182,6 +185,42 @@ export function ShopPanel({
                   <Row key={`${it.id}-${i}`} iid={it.id} qty={it.qty} right={<Coin copper={sellPrice(it.id)} />} onClick={() => act("sell", `sell-${it.id}-${i}`, it.id)} disabled={!!busy} busy={busy === `sell-${it.id}-${i}`} label="sat" />
                 ))
               )}
+            </div>
+          ) : null}
+
+          {tab === "takas" && market ? (
+            <div className="flex flex-col gap-2">
+              <div
+                className="rounded-[8px] px-2.5 py-2 text-[10.5px] leading-relaxed"
+                style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)", color: "var(--frp-muted)" }}
+              >
+                Sarraf kuru: <b>1 altın = 100 bakır</b>, <b>1 gümüş = 10 bakır</b>. Kesen tek havuzda tutulur; altın, gümüş ve bakır kendiliğinden en uygun şekilde bölünür. Ağır bakırı taşınabilir bir Altın Keseye çevirebilir ya da bozabilirsin.
+              </div>
+              <button
+                type="button"
+                disabled={gold < 100 || !!busy}
+                onClick={() => act("mint", "mint", "")}
+                className="flex items-center justify-between rounded-[8px] px-2.5 py-2 text-left transition-colors disabled:opacity-40"
+                style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}
+              >
+                <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "var(--frp-ink-soft)" }}>
+                  <PixelSprite name="it_coin" cell={2} /> 100 bakır → 1 Altın Kese
+                </span>
+                <span className="text-[10.5px] font-semibold" style={{ color: "var(--frp-accent-ink)" }}>{busy === "mint" ? "..." : "bas"}</span>
+              </button>
+              <button
+                type="button"
+                disabled={pouches < 1 || !!busy}
+                onClick={() => act("melt", "melt", "")}
+                className="flex items-center justify-between rounded-[8px] px-2.5 py-2 text-left transition-colors disabled:opacity-40"
+                style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}
+              >
+                <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "var(--frp-ink-soft)" }}>
+                  <PixelSprite name="it_coin" cell={2} /> 1 Altın Kese → 100 bakır
+                  <span style={{ color: "var(--frp-faint)" }}>({pouches} kese)</span>
+                </span>
+                <span className="text-[10.5px] font-semibold" style={{ color: "var(--frp-accent-ink)" }}>{busy === "melt" ? "..." : "boz"}</span>
+              </button>
             </div>
           ) : null}
 

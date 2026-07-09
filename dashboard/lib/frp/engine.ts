@@ -139,6 +139,8 @@ const RESOLVE_TOOL = {
       memory_update: { type: "string" },
       loot: {
         type: "array",
+        description:
+          "Items a character GAINS this turn: each entry is added to that character's inventory and revealed at the table. Use this every time a character picks something up, loots a body or chest, is handed an item, or finds one in the world, so the pickup actually reaches their inventory. Do NOT list items the character already carries, and never announce a find without putting it here.",
         items: {
           type: "object",
           properties: {
@@ -210,6 +212,14 @@ const RESOLVE_TOOL = {
           },
           required: ["node", "house"],
         },
+      },
+      impossible: {
+        type: "boolean",
+        description: "Set true and give a reason when the acting character tries something they CANNOT do because they lack the required item, weapon, or ammunition on their sheet (for example firing a bow with no bow or no arrows, unlocking with no key, casting with no focus). When true, do NOT narrate it happening and do NOT change any state; the same player will simply act again.",
+      },
+      reason: {
+        type: "string",
+        description: "Short Turkish sentence explaining why the action is impossible (what they are missing), shown when impossible is true.",
       },
       location: {
         type: "string",
@@ -437,6 +447,13 @@ export async function resolveTurn(
   );
   const maxTokens = opts.isOpening ? 1600 : 1050;
   let gm = await callGM(model, userPrompt, maxTokens);
+  if (gm?.impossible && !opts.isOpening) {
+    const why =
+      noDash((gm.reason || gm.narration || "").trim()) ||
+      "Bunu yapmak için gereken eşya sende yok. Başka bir şey dene.";
+    await appendTurn(campaignId, "gm", "system", why, { warning: true }, campaign.round);
+    return { ok: false, error: "impossible" };
+  }
   if (gm && !(gm.narration || "").trim()) {
     const retry = await callGM(model, userPrompt, 1600);
     if (retry && (retry.narration || "").trim()) gm = retry;
@@ -465,6 +482,17 @@ export async function resolveTurn(
     actor: string;
     payload?: Record<string, unknown>;
   }[] = [];
+
+  const hadBefore = new Map<string, Set<string>>();
+  for (const c of characters)
+    hadBefore.set(c.handle, new Set((c.inventory || []).map((i) => i.id)));
+  const grantedItems = new Map<string, Set<string>>();
+  for (const e of gm.effects || [])
+    if (e.add_items?.length) {
+      let s = grantedItems.get(e.handle);
+      if (!s) grantedItems.set(e.handle, (s = new Set()));
+      for (const id of e.add_items) s.add(id);
+    }
 
   for (const e of gm.effects || []) {
     const c = byHandle.get(e.handle);
@@ -500,6 +528,20 @@ export async function resolveTurn(
 
   if (dest && actor) actor.location = dest.key;
 
+  const lootReveals: { handle: string; item: string; rarity: string }[] = [];
+  for (const lt of gm.loot || []) {
+    const c = byHandle.get(lt.handle);
+    if (!c || !lt.item) continue;
+    if (hadBefore.get(lt.handle)?.has(lt.item)) continue;
+    if (!grantedItems.get(lt.handle)?.has(lt.item))
+      c.inventory = addToInventory(c.inventory, lt.item);
+    lootReveals.push({
+      handle: lt.handle,
+      item: lt.item,
+      rarity: lt.rarity || itemById(lt.item)?.rarity || "common",
+    });
+  }
+
   for (const c of characters) {
     c.inventory = stackInventory(c.inventory);
     await saveCharacter(c);
@@ -522,15 +564,16 @@ export async function resolveTurn(
     "gm",
     "narration",
     narration,
-    { rolls, dice: pool, loot: gm.loot || [], location, fire, heralds },
+    { rolls, dice: pool, loot: lootReveals, location, fire, heralds },
     campaign.round,
   );
-  for (const lt of gm.loot || []) {
+  for (const lt of lootReveals) {
+    const c = byHandle.get(lt.handle);
     extraTurns.push({
       kind: "loot",
       actor: lt.handle,
-      content: `${lt.handle}, ${itemNameTr(lt.item)} buldu.`,
-      payload: { item: lt.item, rarity: lt.rarity || itemById(lt.item)?.rarity || "common" },
+      content: `${c?.name || lt.handle}, ${itemNameTr(lt.item)} aldı.`,
+      payload: { item: lt.item, rarity: lt.rarity },
     });
   }
   for (const t of extraTurns)

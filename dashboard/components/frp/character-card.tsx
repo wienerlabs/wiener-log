@@ -30,10 +30,12 @@ export function CharacterCard({
   character: c,
   isTurn = false,
   compact = false,
+  onWield,
 }: {
   character: Character;
   isTurn?: boolean;
   compact?: boolean;
+  onWield?: (item: string) => void;
 }) {
   const dom = dominantSin(c);
   const dead = !c.alive;
@@ -126,26 +128,52 @@ export function CharacterCard({
               const item = itemById(it.id);
               const color = item ? RARITY_COLOR[item.rarity] : "#8b949e";
               const qty = it.qty ?? 1;
-              return (
+              const isWeapon = item?.category === "weapon";
+              const isWielded = c.wielded === it.id;
+              const clickable = !!onWield && isWeapon;
+              const title = item
+                ? `${itemNameTr(it.id)}${qty > 1 ? ` ×${qty}` : ""} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}${clickable ? (isWielded ? "\nKuşanılan silah (bırakmak için tıkla)" : "\nSaldırı silahı olarak seç") : ""}`
+                : it.id;
+              const inner = item ? (
+                <PixelSprite name={item.sprite} cell={2} glow={item.rarity === "legendary" ? color : undefined} />
+              ) : (
+                <span className="text-[8px]" style={{ color: "var(--frp-faint)" }}>?</span>
+              );
+              const badge =
+                qty > 1 ? (
+                  <span
+                    className="absolute -bottom-1 -right-1 rounded-full px-1 text-[8.5px] font-bold tabular-nums"
+                    style={{ background: "var(--frp-ink)", color: "var(--frp-canvas)", minWidth: 13, textAlign: "center" }}
+                  >
+                    {qty}
+                  </span>
+                ) : null;
+              const style = {
+                background: isWielded ? "var(--frp-accent-soft)" : "#00000012",
+                border: `1.5px solid ${isWielded ? "var(--frp-accent)" : color}`,
+                boxShadow: isWielded ? "0 0 0 1px var(--frp-accent)" : undefined,
+              };
+              return clickable ? (
+                <button
+                  key={`${it.id}-${i}`}
+                  type="button"
+                  title={title}
+                  onClick={() => onWield!(it.id)}
+                  className="relative flex size-9 items-center justify-center rounded-[7px] transition-colors"
+                  style={style}
+                >
+                  {inner}
+                  {badge}
+                </button>
+              ) : (
                 <div
                   key={`${it.id}-${i}`}
-                  title={item ? `${itemNameTr(it.id)}${qty > 1 ? ` ×${qty}` : ""} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}` : it.id}
+                  title={title}
                   className="relative flex size-9 items-center justify-center rounded-[7px]"
-                  style={{ background: "#00000012", border: `1.5px solid ${color}` }}
+                  style={style}
                 >
-                  {item ? (
-                    <PixelSprite name={item.sprite} cell={2} glow={item.rarity === "legendary" ? color : undefined} />
-                  ) : (
-                    <span className="text-[8px]" style={{ color: "var(--frp-faint)" }}>?</span>
-                  )}
-                  {qty > 1 ? (
-                    <span
-                      className="absolute -bottom-1 -right-1 rounded-full px-1 text-[8.5px] font-bold tabular-nums"
-                      style={{ background: "var(--frp-ink)", color: "var(--frp-canvas)", minWidth: 13, textAlign: "center" }}
-                    >
-                      {qty}
-                    </span>
-                  ) : null}
+                  {inner}
+                  {badge}
                 </div>
               );
             })}

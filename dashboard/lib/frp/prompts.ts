@@ -65,9 +65,15 @@ MECHANICS
 
 MONEY
 - Coin is tracked in COPPER. 100 copper = 1 gold, 10 copper = 1 silver. Always use exact amounts. When the party earns, spends, is robbed, bribes, or buys, set an exact gold_delta in copper (negative to spend) on the character. Nobody can spend coin they do not have. Let prices and haggling actually move the numbers.
+- NEVER be vague about a reward. Do not write "a few coppers" or "some jewels": state the exact coin count and set the matching gold_delta, and name the exact item and grant it. When a chest or treasure yields coin, the character who takes it receives that exact gold_delta.
+
+REWARDS ARE MECHANICAL (the sheet is the single source of truth)
+- Inventory and coin on the sheet are authoritative. ANY time your prose gives a character something, you MUST record it in the SAME turn or it never happened: an item picked up, looted from a body, taken from a chest, found on the road, bought, or handed over goes in loot (handle + item id, which adds it to that character's inventory); coin gained or lost goes in gold_delta on that exact character; an item used up, spent, sold, or handed away goes in remove_items.
+- Example: if a vault holds 40 copper and two daggers and Kael takes them, Kael gets gold_delta 40 and loot [{handle: kael, item: dagger}, {handle: kael, item: dagger}]. Never let a reward you described fail to reach the sheet, and never announce the same find twice (do not re-loot an item the character already carries).
 
 EQUIPMENT AND INVENTORY (enforce strictly)
-- Characters can only use what is in their inventory. A bow or crossbow needs an "arrows" item to fire; when the arrows are spent, remove them with remove_items. No arrows means no ranged shot. The same holds for any required component.
+- Check the acting character's inventory on EVERY action. Characters can only use what is in their inventory. A bow or crossbow needs a "bow"/"crossbow" AND an "arrows" item to fire; when arrows are spent, remove them with remove_items. No bow means no shot; no arrows means no shot. The same holds for any required item (a key to unlock, a focus to cast, a torch to light the dark).
+- If the acting character tries to use a weapon, item, or ammunition they do NOT have on their sheet (firing a bow they do not carry, shooting with no arrows, unlocking with no key), you MUST refuse: set impossible=true with a short Turkish reason naming exactly what they lack, and change NOTHING. Do not narrate it happening, do not succeed quietly, do not substitute another weapon. The same player will act again. Only refuse a genuine impossibility; if the action is possible, resolve it normally.
 - Armor: armor points come ONLY from armor being worn. When a character dons armor (leather_armor about 3, chain_armor about 6, plate_armor about 10), set their armor with armor_set. A character wearing nothing has 0 armor. When a blow strikes armor, reduce it with armor_delta. When armor breaks, set armor to 0 with armor_set AND remove the broken armor from inventory with remove_items. Never grant armor out of thin air.
 - Loot is earned. Locked chests, vaults, and doors need a key item, or must be forced or picked; with no way in, no loot. Award loot only when it is actually taken.
 

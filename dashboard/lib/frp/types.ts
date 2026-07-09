@@ -190,6 +190,8 @@ export interface GMResult {
   world_doom_delta?: number;
   faction_delta?: Record<string, number>;
   captures?: { node: string; house: string }[];
+  impossible?: boolean;
+  reason?: string;
   next_turn?: string;
 }
 

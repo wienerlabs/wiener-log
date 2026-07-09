@@ -193,6 +193,15 @@ function TurnBlock({
     );
   }
 
+  if (t.kind === "system" && (t.payload as { warning?: boolean } | null)?.warning) {
+    return (
+      <div className="mx-auto flex max-w-[520px] items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2 text-center text-[12px] font-medium" style={{ background: "var(--frp-danger-soft)", color: "var(--frp-danger)" }}>
+        <span aria-hidden>⚠</span>
+        {t.content}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto rounded-full px-3 py-1 text-center text-[11.5px]" style={{ background: "var(--frp-line-soft)", color: "var(--frp-faint)" }}>
       {t.content}
