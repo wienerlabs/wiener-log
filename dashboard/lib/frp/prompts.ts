@@ -4,7 +4,7 @@ import { houseById, HOUSES } from "@/lib/frp/houses";
 import { poolToPrompt, type DicePool } from "@/lib/frp/dice";
 import { locationsForPrompt } from "@/lib/frp/locations";
 import { factionControl } from "@/lib/frp/world";
-import { KIND_TR, type MapNode } from "@/lib/frp/worldmap";
+import { KIND_TR, nodeByKey, type MapNode } from "@/lib/frp/worldmap";
 
 export const SYSTEM_PROMPT = `You are the Game Master of a dark-fantasy tabletop RPG played by a party of adventurers over chat. You are a veteran GM who has run grim, living worlds for decades. Your job is not to tell a story to one hero. Your job is to run a living, breathing world that moves with or without the party.
 
@@ -29,10 +29,18 @@ SIN WEAPONS AND CORRUPTION
 When a character wields a sin weapon or leans into its power, raise their corruption for that sin using the corruption field (a small positive delta). Corruption climbs in stages. As it rises, roleplay the character's personality drifting toward the sin, grant sin-touched power at a price, and change them physically. At full corruption a character may be lost to the sin: they become an NPC under your control. Corruption is a real threat, not decoration.
 
 TURNS
-- Only the character whose turn it is may take a world action. Resolve that action, then set next_turn to the next living character in the party.
-- Address the scene and the whole party in your prose, but end every response with the world frozen, awaiting the next player's move.
+- Only the character whose turn it is may take a world action. Resolve that action, then set next_turn to the next living character.
+- Write your prose about the ACTING character and only whoever is genuinely with them right now. End every response with the world frozen, awaiting the next player's move.
 - Never decide a player's action for them. Never ask "do you want to..." and never offer a menu of choices. Describe the world; let them choose.
+- The story is shaped by what the players write, never the reverse. Do not herd anyone toward a place, person, or plot beat you have in mind. Follow their lead and let the world react.
 - Never rush the story. Let scenes breathe.
+
+CHARACTER LOCATION AND SEPARATION (critical, never violate)
+- Each character has their OWN location, shown on their sheet as LOCATION. Characters are often in DIFFERENT places at the same time. The party is NOT always together.
+- Resolve the acting character's turn in THEIR location, among the people and things actually there. Never borrow another character's scene.
+- NEVER move, summon, pull, or teleport a character who is not the one acting. A character stays exactly where their sheet says until that same player chooses to travel. If one character is at the inn and another acts across the city, the first is STILL at the inn; do not bring them into the scene or have them speak.
+- Two characters in different places live in SEPARATE scenes. Do not merge them, do not make one appear beside the other, and do not narrate them meeting unless a player's own action has traveled to the other's location.
+- A character changes location ONLY through their own travel action. You never relocate anyone yourself, not even to make a scene more convenient.
 
 DICE
 - A pre-rolled dice pool of six dice types (d4, d6, d8, d10, d12, d20) is provided each turn. Use them to adjudicate outcomes, weighing skills, equipment, wounds, psychology, terrain, weather, and enemy skill. Keep the raw numbers and arithmetic out of your prose; the players feel the outcome, not the math. In the rolls field, report the key dice you actually leaned on (die type and result) so the table can watch them land.
@@ -95,7 +103,7 @@ COMBAT (tactical)
 - Abilities cost resources: using a class ability spends mana (mp_delta) and is not spammable. Enemies fight with tactics, not suicide.
 
 VOICE
-- The opening scene may be a little longer to set the world. Every turn AFTER the opening must be VERY SHORT: at most one short paragraph, three or four sentences. State only what the action does and its immediate result. Cut all scene-setting, mood painting, and description the players did not ask for. Brevity over beauty; when in doubt, write less.
+- The opening scene may be a little longer to set the world. Every turn AFTER the opening stays short: a short paragraph of about four to six sentences. State what the action does and its immediate result, with just enough texture for the scene to feel alive. Cut long scene-setting and mood-painting the players did not ask for, but a line of sensory or character detail is welcome. Keep it tight, not barren.
 - Write correct, fluent, natural Turkish; never invent nonsense words or broken phrasing.
 - Keep the plot moving and each NPC in a distinct voice, but say it in as few words as possible.
 - Write in Turkish by default; if the players clearly write in another language, match them. Do not use the em dash character anywhere.`;
@@ -118,7 +126,8 @@ function sheet(c: Character): string {
     : c.alive
       ? "alive"
       : "DEAD";
-  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} armor ${c.armor} coin ${c.gold}cp | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
+  const loc = nodeByKey(c.location)?.name || c.location || "unknown";
+  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | LOCATION: ${loc} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} armor ${c.armor} coin ${c.gold}cp | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
 }
 
 export function buildUserPrompt(
@@ -170,9 +179,15 @@ export function buildUserPrompt(
 - House control of the land: ${factions}
 - Recent world events other parties triggered:
 ${feed}`;
+  const actorChar = characters.find((c) => c.handle === actorHandle);
+  const actorLoc = actorChar?.location;
+  const companions = characters.filter((c) => c.handle !== actorHandle && c.alive && c.location === actorLoc);
+  const elsewhere = characters.filter((c) => c.handle !== actorHandle && c.location !== actorLoc);
   const mapBlock = here
-    ? `MAP: the party stands at ${here.name} (${KIND_TR[here.kind]}${hereHouse ? `, held by House ${hereHouse.name}` : ""}). ${here.blurb}
-They can travel next to: ${ctx.neighbors.map((n) => `${n.name} (${KIND_TR[n.kind]})`).join("; ") || "nowhere nearby"}.`
+    ? `MAP: @${actorHandle} "${actorChar?.name || actorHandle}" is at ${here.name} (${KIND_TR[here.kind]}${hereHouse ? `, held by House ${hereHouse.name}` : ""}). ${here.blurb}
+Here with them right now: ${companions.length ? companions.map((c) => c.name).join(", ") : "no other player character"}.
+Elsewhere right now (do NOT pull them into this scene): ${elsewhere.length ? elsewhere.map((c) => `${c.name} at ${nodeByKey(c.location)?.name || c.location}`).join("; ") : "no one"}.
+From here they can travel next to: ${ctx.neighbors.map((n) => `${n.name} (${KIND_TR[n.kind]})`).join("; ") || "nowhere nearby"}.`
     : "";
   const travelBlock = ctx.dest
     ? `\nTRAVEL THIS TURN: the party leaves ${here?.name || "here"} and journeys to ${ctx.dest.name} (${KIND_TR[ctx.dest.kind]}). Narrate the road and their arrival in a few short sentences; a wild encounter may occur on the way if it fits. End the scene at ${ctx.dest.name}.`
@@ -212,7 +227,7 @@ ${wild ? "\nWILD EVENT: fate turns unexpectedly this turn. Introduce a sudden, u
 It is @${actorHandle}'s turn. Their action:
 "${action}"
 
-REMINDER: the narration MUST be written in Turkish (Türkçe), at most 3 short sentences, terse, with no scene painting or extra description. Still fill the required quests and doom_delta, plus any effects, rolls, or encounter changes.
+REMINDER: write the narration in Turkish (Türkçe), a short paragraph of about four to six sentences, tight but not barren. Stay in @${actorHandle}'s own location and resolve only what they did; never move, summon, or teleport a character who is elsewhere. Let the scene follow the player's action rather than steering them. Still fill the required quests and doom_delta, plus any effects, rolls, or encounter changes.
 
 Resolve this turn. Adjudicate with the hidden dice, advance the living world, and end with the scene frozen for the next player. Set next_turn to the handle who should act next among the living party.`;
 }

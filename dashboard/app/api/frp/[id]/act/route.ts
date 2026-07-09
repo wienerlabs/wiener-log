@@ -135,11 +135,12 @@ export async function POST(
     if (campaign.encounter?.active)
       return Response.json({ error: "savaşta seyahat edilmez" }, { status: 400 });
     const dest = WORLD_MAP[body.travel];
-    if (!dest || !campaign.position || !areNeighbors(campaign.position, dest.key))
-      return Response.json({ error: "oraya buradan gidilmez" }, { status: 400 });
+    if (!dest) return Response.json({ error: "böyle bir yer yok" }, { status: 400 });
     const ch = await getCharacter(campaignId, handle);
     if (!ch || !ch.alive)
       return Response.json({ error: "no living character" }, { status: 400 });
+    if (!ch.location || !areNeighbors(ch.location, dest.key))
+      return Response.json({ error: "oraya buradan gidilmez" }, { status: 400 });
     await appendTurn(campaignId, handle, "action", `${dest.name} yönüne yola çıkıyorum.`, null, campaign.round);
     const r = await resolveTurn(campaignId, handle, `Takım ${dest.name} yönüne yola çıkıyor.`, { travelTo: dest.key });
     return Response.json({ ok: r.ok, narration: r.narration, error: r.error });

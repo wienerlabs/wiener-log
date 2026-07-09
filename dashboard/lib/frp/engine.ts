@@ -11,7 +11,7 @@ import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/frp/prompts";
 import { rollPool, rollDie } from "@/lib/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
 import { houseById } from "@/lib/frp/houses";
-import { SIN_LABEL_TR, itemNameTr, itemById } from "@/lib/frp/items";
+import { SIN_LABEL_TR, itemNameTr, itemById, addToInventory, removeFromInventory, stackInventory } from "@/lib/frp/items";
 import { getWorld, saveWorld, addWorldEvent, listWorldEvents } from "@/lib/frp/world";
 import { nodeByKey, WORLD_MAP } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
@@ -293,12 +293,8 @@ function applyEffect(c: Character, e: Effect): string[] {
   if (e.gold_delta) c.gold = Math.max(0, c.gold + e.gold_delta);
   if (e.armor_set !== undefined) c.armor = Math.max(0, Math.round(e.armor_set));
   if (e.armor_delta) c.armor = Math.max(0, c.armor + e.armor_delta);
-  if (e.add_items) for (const id of e.add_items) c.inventory.push({ id });
-  if (e.remove_items)
-    for (const id of e.remove_items) {
-      const idx = c.inventory.findIndex((i) => i.id === id);
-      if (idx >= 0) c.inventory.splice(idx, 1);
-    }
+  if (e.add_items) for (const id of e.add_items) c.inventory = addToInventory(c.inventory, id);
+  if (e.remove_items) for (const id of e.remove_items) c.inventory = removeFromInventory(c.inventory, id);
   if (e.add_status)
     for (const s of e.add_status)
       if (!c.status_effects.find((x) => x.id === s.id)) c.status_effects.push(s);
@@ -406,7 +402,8 @@ export async function resolveTurn(
   const recent = await getRecentTurns(campaignId, 16);
   const world = await getWorld();
   const worldFeed = await listWorldEvents(6);
-  const node = nodeByKey(campaign.position);
+  const actor = characters.find((c) => c.handle === actorHandle);
+  const node = nodeByKey(actor?.location || campaign.position);
   const neighbors = (node?.neighbors || [])
     .map(nodeByKey)
     .filter((n): n is MapNode => !!n);
@@ -438,7 +435,7 @@ export async function resolveTurn(
     wild,
     { world, worldFeed, node, neighbors, dest },
   );
-  const maxTokens = opts.isOpening ? 1500 : 850;
+  const maxTokens = opts.isOpening ? 1600 : 1050;
   let gm = await callGM(model, userPrompt, maxTokens);
   if (gm && !(gm.narration || "").trim()) {
     const retry = await callGM(model, userPrompt, 1600);
@@ -501,7 +498,12 @@ export async function resolveTurn(
       for (const r of raised.slice(cap)) r.controlled_by = null;
   }
 
-  for (const c of characters) await saveCharacter(c);
+  if (dest && actor) actor.location = dest.key;
+
+  for (const c of characters) {
+    c.inventory = stackInventory(c.inventory);
+    await saveCharacter(c);
+  }
 
   const narration = noDash(gm.narration || "");
   const rolls = gm.rolls || [];
@@ -628,7 +630,7 @@ export async function resolveTurn(
   for (const ev of worldEventQueue.slice(0, 4))
     await addWorldEvent(campaignId, ev.kind, ev.text.slice(0, 160), ev.house);
 
-  const position = dest ? dest.key : campaign.position;
+  const position = actor?.location || campaign.position;
   const discovered =
     dest && !(campaign.discovered || []).includes(dest.key)
       ? [...(campaign.discovered || []), dest.key]

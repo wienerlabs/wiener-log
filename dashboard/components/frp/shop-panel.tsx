@@ -4,11 +4,13 @@ import { useState } from "react";
 import { PixelSprite } from "@/components/frp/pixel";
 import {
   itemNameTr,
+  itemDescTr,
   itemById,
   coinBreakdown,
   itemPrice,
   sellPrice,
   priceWithDoom,
+  stackInventory,
   MARKET_STOCK,
   FORGE_STOCK,
   FORGE_UPGRADES,
@@ -79,7 +81,7 @@ export function ShopPanel({
   if (forge) tabs.push(["Demirci", "demirci"]);
   tabs.push(["Sat", "sat"]);
 
-  const invSellable = (myChar.inventory || []).filter((it) => itemPrice(it.id) > 0);
+  const invSellable = stackInventory(myChar.inventory || []).filter((it) => itemPrice(it.id) > 0);
 
   return (
     <div className="mb-2 rounded-[12px] p-2.5" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
@@ -177,7 +179,7 @@ export function ShopPanel({
                 </div>
               ) : (
                 invSellable.map((it, i) => (
-                  <Row key={`${it.id}-${i}`} iid={it.id} right={<Coin copper={sellPrice(it.id)} />} onClick={() => act("sell", `sell-${it.id}-${i}`, it.id)} disabled={!!busy} busy={busy === `sell-${it.id}-${i}`} label="sat" />
+                  <Row key={`${it.id}-${i}`} iid={it.id} qty={it.qty} right={<Coin copper={sellPrice(it.id)} />} onClick={() => act("sell", `sell-${it.id}-${i}`, it.id)} disabled={!!busy} busy={busy === `sell-${it.id}-${i}`} label="sat" />
                 ))
               )}
             </div>
@@ -197,6 +199,7 @@ function Row({
   disabled,
   busy,
   label,
+  qty,
 }: {
   iid: string;
   right: React.ReactNode;
@@ -204,20 +207,31 @@ function Row({
   disabled: boolean;
   busy: boolean;
   label: string;
+  qty?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center justify-between rounded-[8px] px-2 py-1.5 text-left transition-colors disabled:opacity-40"
+      className="flex items-center justify-between gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors disabled:opacity-40"
       style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}
     >
-      <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "var(--frp-ink-soft)" }}>
-        <PixelSprite name={itemById(iid)?.sprite || "it_coin"} cell={2} />
-        {itemNameTr(iid)}
+      <span className="flex min-w-0 items-start gap-1.5">
+        <span className="mt-0.5 shrink-0">
+          <PixelSprite name={itemById(iid)?.sprite || "it_coin"} cell={2} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[11px] font-medium" style={{ color: "var(--frp-ink-soft)" }}>
+            {itemNameTr(iid)}
+            {qty && qty > 1 ? <span style={{ color: "var(--frp-faint)" }}> ×{qty}</span> : null}
+          </span>
+          <span className="block text-[9.5px] leading-tight" style={{ color: "var(--frp-faint)" }}>
+            {itemDescTr(iid)}
+          </span>
+        </span>
       </span>
-      <span className="inline-flex items-center gap-1.5 text-[10.5px]" style={{ color: "var(--frp-muted)" }}>
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-[10.5px]" style={{ color: "var(--frp-muted)" }}>
         {busy ? "..." : right}
         <span className="rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-semibold" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)" }}>{label}</span>
       </span>

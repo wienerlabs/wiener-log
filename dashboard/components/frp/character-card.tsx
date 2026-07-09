@@ -4,6 +4,7 @@ import {
   itemNameTr,
   itemDescTr,
   coinBreakdown,
+  stackInventory,
   RARITY_COLOR,
   RARITY_TR,
   SIN_COLOR,
@@ -121,14 +122,15 @@ export function CharacterCard({
             })()}
           </div>
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {(c.inventory || []).slice(0, 10).map((it, i) => {
+            {stackInventory(c.inventory || []).slice(0, 12).map((it, i) => {
               const item = itemById(it.id);
               const color = item ? RARITY_COLOR[item.rarity] : "#8b949e";
+              const qty = it.qty ?? 1;
               return (
                 <div
                   key={`${it.id}-${i}`}
-                  title={item ? `${itemNameTr(it.id)} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}` : it.id}
-                  className="flex size-9 items-center justify-center rounded-[7px]"
+                  title={item ? `${itemNameTr(it.id)}${qty > 1 ? ` ×${qty}` : ""} (${RARITY_TR[item.rarity]})\n${itemDescTr(it.id)}` : it.id}
+                  className="relative flex size-9 items-center justify-center rounded-[7px]"
                   style={{ background: "#00000012", border: `1.5px solid ${color}` }}
                 >
                   {item ? (
@@ -136,6 +138,14 @@ export function CharacterCard({
                   ) : (
                     <span className="text-[8px]" style={{ color: "var(--frp-faint)" }}>?</span>
                   )}
+                  {qty > 1 ? (
+                    <span
+                      className="absolute -bottom-1 -right-1 rounded-full px-1 text-[8.5px] font-bold tabular-nums"
+                      style={{ background: "var(--frp-ink)", color: "var(--frp-canvas)", minWidth: 13, textAlign: "center" }}
+                    >
+                      {qty}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}

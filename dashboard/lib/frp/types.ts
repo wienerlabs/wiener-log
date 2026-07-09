@@ -55,6 +55,7 @@ export interface Character {
   wielded: string | null;
   abilities: string[];
   gold: number;
+  location: string;
   portrait_seed: string;
   alive: boolean;
   created_at: string;

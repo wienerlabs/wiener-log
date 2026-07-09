@@ -1,4 +1,4 @@
-import type { Sin } from "@/lib/frp/types";
+import type { Sin, InventoryItem } from "@/lib/frp/types";
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type ItemCategory =
@@ -57,6 +57,36 @@ const COMMON: ItemDef[] = [
 export function coinBreakdown(copper: number): { gold: number; silver: number; copper: number } {
   const c = Math.max(0, Math.round(copper || 0));
   return { gold: Math.floor(c / 100), silver: Math.floor((c % 100) / 10), copper: c % 10 };
+}
+
+export function stackInventory(inv: InventoryItem[]): InventoryItem[] {
+  const order: string[] = [];
+  const qty: Record<string, number> = {};
+  for (const it of inv || []) {
+    if (!it || !it.id) continue;
+    if (!(it.id in qty)) {
+      order.push(it.id);
+      qty[it.id] = 0;
+    }
+    qty[it.id] += it.qty ?? 1;
+  }
+  return order.map((id) => ({ id, qty: qty[id] }));
+}
+
+export function addToInventory(inv: InventoryItem[], id: string, n = 1): InventoryItem[] {
+  const next = stackInventory(inv);
+  const it = next.find((x) => x.id === id);
+  if (it) it.qty = (it.qty ?? 1) + n;
+  else next.push({ id, qty: n });
+  return next;
+}
+
+export function removeFromInventory(inv: InventoryItem[], id: string, n = 1): InventoryItem[] {
+  const next = stackInventory(inv);
+  const it = next.find((x) => x.id === id);
+  if (!it) return next;
+  it.qty = (it.qty ?? 1) - n;
+  return next.filter((x) => (x.qty ?? 0) > 0);
 }
 
 export const SIN_WEAPONS: ItemDef[] = [

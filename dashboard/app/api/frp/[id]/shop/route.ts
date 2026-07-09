@@ -7,6 +7,9 @@ import {
   priceWithDoom,
   itemNameTr,
   coinBreakdown,
+  addToInventory,
+  removeFromInventory,
+  stackInventory,
   MARKET_STOCK,
   FORGE_STOCK,
   FORGE_UPGRADES,
@@ -42,16 +45,16 @@ export async function POST(
   if (campaign.status !== "active")
     return Response.json({ error: "oyun aktif değil" }, { status: 400 });
 
-  const node = campaign.position ? WORLD_MAP[campaign.position] : undefined;
+  const ch = await getCharacter(campaignId, handle);
+  if (!ch || !ch.alive)
+    return Response.json({ error: "canlı karakter yok" }, { status: 400 });
+
+  const node = ch.location ? WORLD_MAP[ch.location] : undefined;
   if (!node) return Response.json({ error: "burada pazar yok" }, { status: 400 });
   const market = isMarket(node.kind);
   const forge = isForge(node.kind);
   if (!market && !forge)
     return Response.json({ error: "burada alışveriş yok" }, { status: 400 });
-
-  const ch = await getCharacter(campaignId, handle);
-  if (!ch || !ch.alive)
-    return Response.json({ error: "canlı karakter yok" }, { status: 400 });
 
   const body = (await req.json()) as { op?: string; item?: string; from?: string };
   const world = await getWorld();
@@ -67,7 +70,7 @@ export async function POST(
     if ((ch.gold || 0) < cost)
       return Response.json({ error: "altının yetmiyor" }, { status: 400 });
     ch.gold -= cost;
-    ch.inventory = [...(ch.inventory || []), { id: item }];
+    ch.inventory = addToInventory(ch.inventory, item);
     await saveCharacter(ch);
     await appendTurn(campaignId, "system", "system", `${ch.name}, ${itemNameTr(item)} satın aldı (${coinStr(cost)}).`, null, campaign.round);
     return Response.json({ ok: true, gold: ch.gold });
@@ -75,11 +78,11 @@ export async function POST(
 
   if (body.op === "sell") {
     const item = String(body.item || "");
-    const idx = (ch.inventory || []).findIndex((it) => it.id === item);
-    if (idx < 0) return Response.json({ error: "elinde yok" }, { status: 400 });
+    const owned = stackInventory(ch.inventory).find((it) => it.id === item);
+    if (!owned || (owned.qty ?? 0) <= 0) return Response.json({ error: "elinde yok" }, { status: 400 });
     const gain = sellPrice(item);
     if (gain <= 0) return Response.json({ error: "satılamaz" }, { status: 400 });
-    ch.inventory = ch.inventory.filter((_, i) => i !== idx);
+    ch.inventory = removeFromInventory(ch.inventory, item, 1);
     ch.gold = (ch.gold || 0) + gain;
     await saveCharacter(ch);
     await appendTurn(campaignId, "system", "system", `${ch.name}, ${itemNameTr(item)} sattı (+${coinStr(gain)}).`, null, campaign.round);
@@ -91,14 +94,13 @@ export async function POST(
     const from = String(body.from || "");
     const u = FORGE_UPGRADES.find((x) => x.from === from);
     if (!u) return Response.json({ error: "yükseltme yok" }, { status: 400 });
-    const idx = (ch.inventory || []).findIndex((it) => it.id === from);
-    if (idx < 0) return Response.json({ error: "yükseltilecek parça yok" }, { status: 400 });
+    const owned = stackInventory(ch.inventory).find((it) => it.id === from);
+    if (!owned || (owned.qty ?? 0) <= 0) return Response.json({ error: "yükseltilecek parça yok" }, { status: 400 });
     const cost = priceWithDoom(u.cost, doom);
     if ((ch.gold || 0) < cost)
       return Response.json({ error: "altının yetmiyor" }, { status: 400 });
     ch.gold -= cost;
-    ch.inventory = ch.inventory.filter((_, i) => i !== idx);
-    ch.inventory.push({ id: u.to });
+    ch.inventory = addToInventory(removeFromInventory(ch.inventory, from, 1), u.to);
     await saveCharacter(ch);
     await appendTurn(campaignId, "system", "system", `${ch.name}, ${itemNameTr(from)} parçasını ${itemNameTr(u.to)} olarak dövdürdü (${coinStr(cost)}).`, null, campaign.round);
     return Response.json({ ok: true, gold: ch.gold });

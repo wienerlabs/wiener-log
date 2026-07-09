@@ -9,12 +9,14 @@ const ALL_SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", 
 export function WorldHud({
   campaign,
   world,
+  myLocation,
   canTravel,
   onTravel,
   busy,
 }: {
   campaign: Campaign;
   world: WorldState;
+  myLocation: string | null;
   canTravel: boolean;
   onTravel: (key: string) => void;
   busy: boolean;
@@ -98,7 +100,7 @@ export function WorldHud({
 
       <div className="mt-3">
         <WorldMap
-          position={campaign.position}
+          position={myLocation ?? campaign.position}
           discovered={campaign.discovered || []}
           nodeControl={world.node_control || {}}
           canTravel={canTravel}

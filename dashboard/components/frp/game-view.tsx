@@ -249,7 +249,7 @@ export function GameView({
         {joined && campaign.status === "active" ? (
           <div className="mt-4">
             {myChar?.alive && !campaign.encounter?.active ? (
-              <ShopPanel id={id} position={campaign.position} doom={world.doom} myChar={myChar} onDone={poll} />
+              <ShopPanel id={id} position={myChar.location} doom={world.doom} myChar={myChar} onDone={poll} />
             ) : null}
             {campaign.encounter?.active && isMyTurn && myChar?.alive ? (
               <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
@@ -368,6 +368,7 @@ export function GameView({
           <WorldHud
             campaign={campaign}
             world={world}
+            myLocation={myChar?.location ?? null}
             canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
             onTravel={travel}
             busy={sending}
