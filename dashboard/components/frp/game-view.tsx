@@ -44,6 +44,7 @@ export function GameView({
   const [thinking, setThinking] = useState(false);
   const [fireTrigger, setFireTrigger] = useState(0);
   const lastId = useRef(initialTurns.reduce((m, t) => Math.max(m, t.id), 0));
+  const polling = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,8 @@ export function GameView({
   }, [isMyTurn, myChar?.alive]);
 
   const poll = async () => {
+    if (polling.current) return;
+    polling.current = true;
     try {
       const res = await fetch(`/api/frp/${id}?after=${lastId.current}`);
       if (!res.ok) return;
@@ -67,9 +70,15 @@ export function GameView({
       setCampaign(d.campaign);
       setCharacters(d.characters);
       if (d.turns.length) {
-        setTurns((prev) => [...prev, ...d.turns]);
+        let added = false;
+        setTurns((prev) => {
+          const have = new Set(prev.map((t) => t.id));
+          const fresh = d.turns.filter((t) => !have.has(t.id));
+          added = fresh.length > 0;
+          return fresh.length ? [...prev, ...fresh] : prev;
+        });
         lastId.current = d.turns.reduce((m, t) => Math.max(m, t.id), lastId.current);
-        if (d.turns.some((t) => t.kind === "narration" && (t.payload as { fire?: boolean } | null)?.fire))
+        if (added && d.turns.some((t) => t.kind === "narration" && (t.payload as { fire?: boolean } | null)?.fire))
           setFireTrigger((f) => f + 1);
       } else if (d.turns.length === 0 && lastId.current > 0 && d.campaign.round === 0) {
         setTurns([]);
@@ -77,6 +86,8 @@ export function GameView({
       }
     } catch {
       /* ignore */
+    } finally {
+      polling.current = false;
     }
   };
 

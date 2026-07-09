@@ -12,7 +12,7 @@ import {
 import { CLASS_TR, RACE_TR } from "@/lib/frp/classes";
 import { houseById } from "@/lib/frp/houses";
 import type { Character, Sin } from "@/lib/frp/types";
-import { Skull, Shield, Coins } from "lucide-react";
+import { Skull, Shield } from "lucide-react";
 
 const SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", "sloth"];
 
@@ -58,7 +58,7 @@ export function CharacterCard({
           <PixelPortrait
             seed={c.portrait_seed}
             race={c.race}
-            cell={compact ? 5 : 7}
+            cell={compact ? 4 : 6}
             sin={dom && dom.value >= 25 ? dom.sin : null}
           />
         </div>
@@ -114,7 +114,7 @@ export function CharacterCard({
               const cb = coinBreakdown(c.gold);
               return (
                 <span className="inline-flex items-center gap-1 tabular-nums" title="Altın / Gümüş / Bakır">
-                  <Coins className="size-[12px]" style={{ color: "var(--frp-xp)" }} strokeWidth={2} />
+                  <PixelSprite name="it_coin" cell={1} />
                   {cb.gold}a {cb.silver}g {cb.copper}b
                 </span>
               );

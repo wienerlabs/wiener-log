@@ -395,10 +395,14 @@ export async function resolveTurn(
     pool,
     wild,
   );
-  const maxTokens = opts.isOpening ? 1500 : 1000;
-  const gm = await callGM(model, userPrompt, maxTokens);
+  const maxTokens = opts.isOpening ? 1500 : 850;
+  let gm = await callGM(model, userPrompt, maxTokens);
+  if (gm && !(gm.narration || "").trim()) {
+    const retry = await callGM(model, userPrompt, 1600);
+    if (retry && (retry.narration || "").trim()) gm = retry;
+  }
 
-  if (!gm) {
+  if (!gm || !(gm.narration || "").trim()) {
     await appendTurn(
       campaignId,
       "gm",

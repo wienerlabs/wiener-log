@@ -67,7 +67,7 @@ export function JoinPanel({
     <div className="rounded-[16px] p-5" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
       <div className="mb-5 flex items-center gap-3">
         <div className="rounded-[12px] p-1.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
-          <PixelPortrait seed={seed} race={race} cell={8} />
+          <PixelPortrait seed={seed} race={race} cell={7} />
         </div>
         <div>
           <div className="text-[16px] font-semibold" style={{ color: "var(--frp-ink)" }}>

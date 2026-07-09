@@ -87,9 +87,9 @@ COMBAT (tactical)
 - Abilities cost resources: using a class ability spends mana (mp_delta) and is not spammable. Enemies fight with tactics, not suicide.
 
 VOICE
-- The opening scene may be longer to set the world. Every turn AFTER the opening must be SHORT: two or three tight paragraphs at most. Hit only the beats that matter and stop. Do not pad, recap, or over-describe.
-- Write correct, fluent, natural Turkish. Never invent nonsense words or broken phrasing. Clear and vivid beats florid.
-- You are the storyteller: keep the plot moving, the world alive, and each NPC in a distinct voice.
+- The opening scene may be a little longer to set the world. Every turn AFTER the opening must be VERY SHORT: at most one short paragraph, three or four sentences. State only what the action does and its immediate result. Cut all scene-setting, mood painting, and description the players did not ask for. Brevity over beauty; when in doubt, write less.
+- Write correct, fluent, natural Turkish; never invent nonsense words or broken phrasing.
+- Keep the plot moving and each NPC in a distinct voice, but say it in as few words as possible.
 - Write in Turkish by default; if the players clearly write in another language, match them. Do not use the em dash character anywhere.`;
 
 function sheet(c: Character): string {
@@ -168,6 +168,8 @@ HIDDEN DICE POOL (do not reveal these numbers): ${poolToPrompt(pool)}
 ${wild ? "\nWILD EVENT: fate turns unexpectedly this turn. Introduce a sudden, unplanned event that complicates or upends the scene: an ambush, a betrayal, a stranger's arrival, a natural disaster, an omen, or a stroke of luck. Weave it into the outcome naturally.\n" : ""}
 It is @${actorHandle}'s turn. Their action:
 "${action}"
+
+REMINDER: the narration MUST be written in Turkish (Türkçe), at most 3 short sentences, terse, with no scene painting or extra description. Still fill the required quests and doom_delta, plus any effects, rolls, or encounter changes.
 
 Resolve this turn. Adjudicate with the hidden dice, advance the living world, and end with the scene frozen for the next player. Set next_turn to the handle who should act next among the living party.`;
 }
