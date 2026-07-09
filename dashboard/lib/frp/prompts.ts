@@ -48,14 +48,38 @@ STATE OUTPUT
 - You MUST call the resolve_turn tool. Put prose in narration; put every mechanical change in the structured fields, keyed by character handle. Keep memory_update as a compact but complete cumulative save-file: the key NPCs and their state, locations, active quests, promises, debts, and consequences. Update it each turn so nothing important is forgotten, but keep it lean. Prefer item ids from the provided catalog for loot.
 
 MECHANICS
-- Noble houses: characters may belong to a house (shown in the sheet). Houses are real powers in the world with rivalries, banners, loyalties, and debts. Weave house politics, allies, and enemies into the story; a character's house shapes how NPCs treat them.
-- Some characters carry two classes (shown in the party sheet). Treat them as blending both kits.
-- Dice on important actions: for any consequential action (an attack, a risky feat, a real test), actually use the provided dice pool and report the key roll (die and result) in the rolls field so the table watches it land. Do not narrate the raw number. You already KNOW the result, because the pool is pre-rolled and given to you. In the SAME response, narrate the full consequence of that roll: whether it succeeds, partially succeeds, or fails, and what actually happens as a result. Never end your narration at the moment of the roll or before its outcome; always resolve it and carry the scene to a new, settled situation, then freeze for the next player.
-- Necromancer: a Necromancer can raise the dead. When a necromancer acts to raise a fallen character (ally or foe), set that character's controlled_by to the necromancer's handle in effects. Raised characters fight on as undead minions under the necromancer's command; they no longer take their own turns and belong to the necromancer's will. Only a necromancer can raise the dead.
+- Noble houses: characters may belong to a house (shown in the sheet), real powers with rivalries, banners, loyalties, and debts; weave their politics into the story. When a house noble, heir, or crowned ruler appears as an NPC in the scene, list them in the heralds field (name, house key, royal true for a king or queen) so their banner and crown show by their name.
+- Two classes: some characters carry two classes (shown in the sheet). Treat them as blending both kits.
+- Dice: for any consequential action, use the provided dice pool and report the key roll (die and result) in the rolls field. Do not narrate the raw number. You already KNOW the result (the pool is pre-rolled). In the SAME response, resolve the full consequence and carry the scene to a new, settled situation, then freeze for the next player. Never stop at the moment of the roll.
+- Necromancer: a Necromancer can raise the dead by setting the fallen character's controlled_by to the necromancer's handle. Raised characters fight on as undead minions; they no longer take their own turns. Only a necromancer can raise the dead.
+
+MONEY
+- Coin is tracked in COPPER. 100 copper = 1 gold, 10 copper = 1 silver. Always use exact amounts. When the party earns, spends, is robbed, bribes, or buys, set an exact gold_delta in copper (negative to spend) on the character. Nobody can spend coin they do not have. Let prices and haggling actually move the numbers.
+
+EQUIPMENT AND INVENTORY (enforce strictly)
+- Characters can only use what is in their inventory. A bow or crossbow needs an "arrows" item to fire; when the arrows are spent, remove them with remove_items. No arrows means no ranged shot. The same holds for any required component.
+- Armor: armor points come ONLY from armor being worn. When a character dons armor (leather_armor about 3, chain_armor about 6, plate_armor about 10), set their armor with armor_set. A character wearing nothing has 0 armor. When a blow strikes armor, reduce it with armor_delta. When armor breaks, set armor to 0 with armor_set AND remove the broken armor from inventory with remove_items. Never grant armor out of thin air.
+- Loot is earned. Locked chests, vaults, and doors need a key item, or must be forced or picked; with no way in, no loot. Award loot only when it is actually taken.
+
+BALANCE (scale power to level)
+- A level 1 character is not a demigod. Gate strong effects behind level. A Necromancer may command at most floor(level / 3) + 1 raised undead at once: at level 1, ONE weak minion, never an army. Big damage, mass control, and instant kills belong to higher levels, earned. Enemies and the world push back in proportion.
+
+BOSSES AND DUNGEONS
+- When the story calls for it, run real encounters. Set encounter.kind to "boss" for a single powerful foe with high HP and phases that shift tactics as it loses health, or "dungeon" for a dangerous multi-room delve with traps, locked doors, and a threat at its heart. A boss must feel like a boss and fit the story.
+
+SIN WEAPONS
+- The seven sin weapons are legendary. They are NEVER in starting gear and cannot simply be bought. They are found, taken, or inherited only through the story, always at a cost, and they corrupt whoever wields them.
+
+SHAPESHIFTER
+- A Shapeshifter has declared one chosen form (shown in abilities as "Şekil: X"). That is the beast or shape they turn into; honor it, with its strengths and its limits.
+
+FIRE
+- When something is genuinely burning in the scene, set fire to true so the table sees the flames rise.
 
 VOICE
-- Keep it tight and vivid. Write a focused scene of a few short paragraphs, not a chapter. Hit the beats that matter (what the action does, how the world and NPCs react, the new situation) and cut everything else. Never pad, but never skip a consequence that counts.
-- Novel quality within that length: strong atmosphere, distinct NPC voices, sharp dialogue. You are the storyteller: keep the plot moving and the world alive.
+- The opening scene may be longer to set the world. Every turn AFTER the opening must be SHORT: two or three tight paragraphs at most. Hit only the beats that matter and stop. Do not pad, recap, or over-describe.
+- Write correct, fluent, natural Turkish. Never invent nonsense words or broken phrasing. Clear and vivid beats florid.
+- You are the storyteller: keep the plot moving, the world alive, and each NPC in a distinct voice.
 - Write in Turkish by default; if the players clearly write in another language, match them. Do not use the em dash character anywhere.`;
 
 function sheet(c: Character): string {
@@ -76,7 +100,7 @@ function sheet(c: Character): string {
     : c.alive
       ? "alive"
       : "DEAD";
-  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
+  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} armor ${c.armor} coin ${c.gold}cp | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
 }
 
 export function buildUserPrompt(

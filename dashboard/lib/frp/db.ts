@@ -91,7 +91,7 @@ const CHAR_COLS = `id, campaign_id, handle, name, class, race, level, xp,
 export async function getCharacters(campaignId: number): Promise<Character[]> {
   return (await sql`
     SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
-      level, xp, hp_cur, hp_max, mp_cur, mp_max, stats, inventory, status_effects,
+      level, xp, hp_cur, hp_max, mp_cur, mp_max, armor, stats, inventory, status_effects,
       corruption, wielded, abilities, gold, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} ORDER BY id ASC
   `) as Character[];
@@ -103,7 +103,7 @@ export async function getCharacter(
 ): Promise<Character | null> {
   const rows = (await sql`
     SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
-      level, xp, hp_cur, hp_max, mp_cur, mp_max, stats, inventory, status_effects,
+      level, xp, hp_cur, hp_max, mp_cur, mp_max, armor, stats, inventory, status_effects,
       corruption, wielded, abilities, gold, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} AND handle = ${handle} LIMIT 1
   `) as Character[];
@@ -120,6 +120,7 @@ export async function createCharacter(c: {
   house?: string | null;
   hp: number;
   mp: number;
+  coin?: number;
   stats: Record<string, number>;
   inventory: { id: string }[];
   abilities: string[];
@@ -131,7 +132,7 @@ export async function createCharacter(c: {
     VALUES (${c.campaign_id}, ${c.handle}, ${c.name}, ${c.cls}, ${c.cls2 ?? null}, ${c.race}, ${c.house ?? null},
       ${c.hp}, ${c.hp}, ${c.mp}, ${c.mp},
       ${JSON.stringify(c.stats)}::jsonb, ${JSON.stringify(c.inventory)}::jsonb,
-      ${JSON.stringify(c.abilities)}::jsonb, ${c.portrait_seed}, 25)
+      ${JSON.stringify(c.abilities)}::jsonb, ${c.portrait_seed}, ${c.coin ?? 30})
     ON CONFLICT (campaign_id, handle) DO NOTHING
   `;
 }
@@ -142,6 +143,7 @@ export async function saveCharacter(c: Character): Promise<void> {
       level = ${c.level}, xp = ${c.xp},
       hp_cur = ${c.hp_cur}, hp_max = ${c.hp_max},
       mp_cur = ${c.mp_cur}, mp_max = ${c.mp_max},
+      armor = ${c.armor},
       inventory = ${JSON.stringify(c.inventory)}::jsonb,
       status_effects = ${JSON.stringify(c.status_effects)}::jsonb,
       corruption = ${JSON.stringify(c.corruption)}::jsonb,
@@ -184,7 +186,7 @@ export async function restartCampaign(campaignId: number): Promise<void> {
   await sql`DELETE FROM campaign_turns WHERE campaign_id = ${campaignId}`;
   await sql`
     UPDATE characters SET
-      hp_cur = hp_max, mp_cur = mp_max,
+      hp_cur = hp_max, mp_cur = mp_max, armor = 0,
       status_effects = '[]'::jsonb, corruption = '{}'::jsonb,
       wielded = null, alive = true, controlled_by = null
     WHERE campaign_id = ${campaignId}

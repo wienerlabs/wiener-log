@@ -6,7 +6,7 @@ import {
   getCharacters,
   updateCampaign,
 } from "@/lib/frp/db";
-import { classById, raceById } from "@/lib/frp/classes";
+import { classById, raceById, CLASS_COIN, RACE_ITEMS } from "@/lib/frp/classes";
 import { houseById } from "@/lib/frp/houses";
 import type { Stats } from "@/lib/frp/types";
 
@@ -37,6 +37,7 @@ export async function POST(
     race?: string;
     trait?: string;
     house?: string;
+    shiftForm?: string;
   };
   const house = body.house ? houseById(String(body.house)) : null;
   const cls = classById(String(body.cls || ""));
@@ -66,12 +67,22 @@ export async function POST(
   const hp = baseHp + Math.max(0, stats.con - 10);
   const mp = baseMp + Math.max(0, Math.floor((stats.int - 10) / 2));
 
-  const items = [...new Set([...cls.items, ...(cls2 ? cls2.items : [])])]
-    .slice(0, 6)
+  const raceItems = RACE_ITEMS[race.id] || [];
+  const items = [
+    ...new Set([...cls.items, ...(cls2 ? cls2.items : []), ...raceItems]),
+  ]
+    .slice(0, 8)
     .map((i) => ({ id: i }));
+
+  let coin = CLASS_COIN[cls.id] ?? 40;
+  if (cls2) coin = Math.round((coin + (CLASS_COIN[cls2.id] ?? 40)) / 2);
+
   const abilities = [cls.ability];
   if (cls2) abilities.push(cls2.ability);
   if (trait) abilities.push(`Tabiat: ${trait}`);
+  const isTamer = cls.id === "tamer" || cls2?.id === "tamer";
+  const shiftForm = isTamer ? String(body.shiftForm || "").slice(0, 20).trim() : "";
+  if (shiftForm) abilities.push(`Şekil: ${shiftForm}`);
 
   await createCharacter({
     campaign_id: campaignId,
@@ -83,6 +94,7 @@ export async function POST(
     house: house ? house.id : null,
     hp,
     mp,
+    coin,
     stats: stats as unknown as Record<string, number>,
     inventory: items,
     abilities,

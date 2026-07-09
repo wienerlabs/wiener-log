@@ -265,6 +265,21 @@ body {
   0%, 100% { transform: translateY(0) rotate(-9deg); }
   50% { transform: translateY(-3px) rotate(9deg); }
 }
+@keyframes frp-fire-rise {
+  0% { transform: translateY(0) scale(0.7); opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(-105vh) scale(1.1); opacity: 0; }
+}
+.frp-fire {
+  position: fixed;
+  bottom: -48px;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation-name: frp-fire-rise;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
 .frp-die3d { transform-style: preserve-3d; will-change: transform; }
 .frp-roll { animation: frp-tumble 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .frp-thinking-die { animation: frp-spin 1.4s linear infinite; }

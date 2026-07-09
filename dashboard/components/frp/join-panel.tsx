@@ -26,7 +26,9 @@ export function JoinPanel({
   const [race, setRace] = useState(RACES[0].id);
   const [trait, setTrait] = useState(TRAITS[0]);
   const [house, setHouse] = useState(HOUSES[0].id);
+  const [shiftForm, setShiftForm] = useState("");
   const [busy, setBusy] = useState(false);
+  const isTamer = cls === "tamer" || cls2 === "tamer";
   const [seed, setSeed] = useState("kahraman:warrior:human");
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function JoinPanel({
       const res = await fetch(`/api/frp/${id}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait, house }),
+        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait, house, shiftForm: isTamer ? shiftForm : "" }),
       });
       if (res.ok) router.refresh();
       else setBusy(false);
@@ -132,6 +134,20 @@ export function JoinPanel({
               );
             })}
           </div>
+          {isTamer ? (
+            <div className="mt-4">
+              <div className="mb-1.5 text-[11px] font-semibold tracking-[0.05em]" style={{ color: "var(--frp-faint)" }}>
+                Şekil Değiştiren: neye dönüşüyorsun? (tek kelime)
+              </div>
+              <input
+                value={shiftForm}
+                onChange={(e) => setShiftForm(e.target.value.replace(/\s+/g, " ").trimStart())}
+                placeholder="Örn. Kurt, Ayı, Kuzgun"
+                className="w-full rounded-[11px] px-3.5 py-2 text-[13.5px] outline-none"
+                style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)", color: "var(--frp-ink)" }}
+              />
+            </div>
+          ) : null}
           {dualAllowed ? (
             <div className="mt-4">
               <div className="mb-1.5 text-[11px] font-semibold tracking-[0.05em]" style={{ color: "var(--frp-faint)" }}>

@@ -94,7 +94,7 @@ function buildPortrait(
   race?: string,
   sin?: Sin,
 ): (string | null)[][] {
-  const N = 12;
+  const N = 16;
   const g: (string | null)[][] = Array.from({ length: N }, () =>
     Array(N).fill(null),
   );
@@ -111,78 +111,103 @@ function buildPortrait(
       : (race && RACE_EYE[race]) || pick(EYES, 7);
     const beard = ((hs >>> 11) & 1) === 1 || race === "dwarf";
     const style = (hs >>> 13) % 3;
-    const dark = shade(skin, -26);
+    const dark = shade(skin, -24);
+    const dark2 = shade(skin, -44);
+    const brow = shade(hair, -12);
+    const white = "#f4efe4";
 
-    for (let y = 2; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = skin;
-    for (let y = 3; y <= 9; y++) {
-      g[y][3] = dark;
-      g[y][8] = dark;
+    for (let y = 3; y <= 13; y++) for (let x = 4; x <= 11; x++) g[y][x] = skin;
+    for (let y = 4; y <= 12; y++) {
+      g[y][4] = dark;
+      g[y][11] = dark;
     }
-    for (let y = 0; y <= 2; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
-    if (style !== 2) for (let y = 2; y <= 6; y++) (g[y][2] = hair), (g[y][9] = hair);
-    if (style === 1) for (let y = 3; y <= 9; y++) (g[y][2] = hair), (g[y][9] = hair);
-    g[3][4] = shade(hair, 12);
-    g[3][7] = shade(hair, 12);
-    g[4][4] = eye;
-    g[4][7] = eye;
-    g[6][5] = dark;
-    g[6][6] = dark;
-    g[8][5] = "#7a4a3a";
-    g[8][6] = "#7a4a3a";
+    g[13][5] = dark;
+    g[13][10] = dark;
+    for (let y = 0; y <= 3; y++) for (let x = 4; x <= 11; x++) g[y][x] = hair;
+    g[3][5] = shade(hair, 14);
+    g[3][10] = shade(hair, 14);
+    if (style !== 2) for (let y = 3; y <= 8; y++) (g[y][3] = hair), (g[y][12] = hair);
+    if (style === 1) for (let y = 3; y <= 12; y++) (g[y][3] = hair), (g[y][12] = hair);
+    g[5][5] = brow;
+    g[5][6] = brow;
+    g[5][9] = brow;
+    g[5][10] = brow;
+    g[6][5] = white;
+    g[6][6] = eye;
+    g[7][6] = shade(eye, -22);
+    g[6][10] = white;
+    g[6][9] = eye;
+    g[7][9] = shade(eye, -22);
+    g[8][7] = dark;
+    g[8][8] = dark;
+    g[9][7] = dark2;
+    g[9][8] = dark2;
+    g[11][6] = "#8a4a3e";
+    g[11][7] = "#8a4a3e";
+    g[11][8] = "#8a4a3e";
+    g[11][9] = "#8a4a3e";
+    g[12][7] = shade(skin, -14);
+    g[12][8] = shade(skin, -14);
 
     if (race === "elf" || race === "half_elf") {
-      g[3][2] = skin;
-      g[4][2] = skin;
-      g[5][2] = dark;
-      g[3][9] = skin;
-      g[4][9] = skin;
-      g[5][9] = dark;
+      g[5][3] = skin;
+      g[6][3] = skin;
+      g[7][3] = dark;
+      g[5][12] = skin;
+      g[6][12] = skin;
+      g[7][12] = dark;
     }
     if (race === "goblin") {
-      g[3][1] = skin;
-      g[4][1] = skin;
-      g[5][1] = dark;
-      g[3][2] = skin;
-      g[4][2] = skin;
-      g[3][10] = skin;
-      g[4][10] = skin;
-      g[5][10] = dark;
-      g[3][9] = skin;
-      g[4][9] = skin;
+      g[5][2] = skin;
+      g[6][2] = skin;
+      g[7][2] = dark;
+      g[5][3] = skin;
+      g[6][3] = skin;
+      g[5][13] = skin;
+      g[6][13] = skin;
+      g[7][13] = dark;
+      g[5][12] = skin;
+      g[6][12] = skin;
     }
     if (race === "tiefling") {
-      g[0][3] = "#241012";
-      g[1][3] = "#4a1c1c";
-      g[0][8] = "#241012";
-      g[1][8] = "#4a1c1c";
-    }
-    if (race === "orc" || race === "goblin") {
-      g[9][4] = "#f2f2f6";
-      g[9][7] = "#f2f2f6";
-      g[8][4] = "#dfe0e6";
-      g[8][7] = "#dfe0e6";
+      g[0][4] = "#2a1210";
+      g[1][4] = "#4a1c1a";
+      g[2][4] = "#5a221e";
+      g[0][11] = "#2a1210";
+      g[1][11] = "#4a1c1a";
+      g[2][11] = "#5a221e";
     }
     if (beard) {
-      for (let y = 7; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = hair;
-      g[8][5] = "#5a3a2f";
-      g[8][6] = "#5a3a2f";
+      for (let y = 10; y <= 14; y++) for (let x = 4; x <= 11; x++) g[y][x] = hair;
+      g[11][6] = "#5a2a24";
+      g[11][7] = "#5a2a24";
+      g[11][8] = "#5a2a24";
+      g[11][9] = "#5a2a24";
       if (race === "dwarf") {
-        for (let x = 3; x <= 8; x++) g[1][x] = "#8a8a97";
-        g[0][4] = "#c79a45";
-        g[0][7] = "#c79a45";
+        for (let x = 4; x <= 11; x++) {
+          g[1][x] = "#9a9aa6";
+          g[2][x] = "#7e7e8c";
+        }
+        g[0][6] = "#c79a45";
+        g[0][9] = "#c79a45";
       }
     }
-    g[11][5] = skin;
-    g[11][6] = skin;
+    if (race === "orc" || race === "goblin") {
+      g[12][6] = white;
+      g[12][9] = white;
+    }
+    g[14][7] = skin;
+    g[14][8] = skin;
+    g[15][7] = dark;
     if (sin) {
-      g[1][5] = SIN_COLOR[sin] || "#2a2020";
-      g[1][6] = SIN_COLOR[sin] || "#2a2020";
+      g[2][7] = SIN_COLOR[sin] || "#2a2020";
+      g[2][8] = SIN_COLOR[sin] || "#2a2020";
     }
     return g;
   } catch {
-    for (let y = 2; y <= 10; y++) for (let x = 3; x <= 8; x++) g[y][x] = "#c98d6a";
-    g[4][4] = "#2a2020";
-    g[4][7] = "#2a2020";
+    for (let y = 3; y <= 13; y++) for (let x = 4; x <= 11; x++) g[y][x] = "#c98d6a";
+    g[6][6] = "#2a2020";
+    g[6][9] = "#2a2020";
     return g;
   }
 }
@@ -201,10 +226,11 @@ export function PixelPortrait({
   className?: string;
 }) {
   const g = buildPortrait(seed, race ?? undefined, sin ?? undefined);
-  const size = 12 * cell;
+  const n = g.length;
+  const size = n * cell;
   const rects: ReactNode[] = [];
-  for (let y = 0; y < 12; y++) {
-    for (let x = 0; x < 12; x++) {
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < g[y].length; x++) {
       const c = g[y][x];
       if (!c) continue;
       rects.push(

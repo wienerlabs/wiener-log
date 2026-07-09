@@ -1,7 +1,8 @@
-import { PixelPortrait } from "@/components/frp/pixel";
+import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
 import { DiceRoll } from "@/components/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
-import type { Character, Turn, HiddenRoll } from "@/lib/frp/types";
+import { houseById } from "@/lib/frp/houses";
+import type { Character, Turn, HiddenRoll, Herald } from "@/lib/frp/types";
 import { Wand2, Skull, Sparkles, Swords } from "lucide-react";
 
 export function Transcript({
@@ -33,6 +34,7 @@ function TurnBlock({
     const rolls = (t.payload?.rolls as HiddenRoll[] | undefined) || [];
     const locKey = (t.payload?.location as string | undefined) || null;
     const loc = locKey ? locationByKey(locKey) : null;
+    const heralds = (t.payload?.heralds as Herald[] | undefined) || [];
     return (
       <div
         className="rise rounded-[14px] border-l-[3px] p-4"
@@ -46,6 +48,27 @@ function TurnBlock({
           <Wand2 className="size-[13px]" strokeWidth={2} />
           Anlatıcı
         </div>
+        {heralds.length ? (
+          <div className="mb-2.5 flex flex-wrap gap-2">
+            {heralds.map((h, i) => {
+              const house = houseById(h.house);
+              if (!house) return null;
+              return (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 rounded-full py-0.5 pl-1 pr-2"
+                  style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}
+                >
+                  <PixelSprite name={house.sprite} cell={2} />
+                  {h.royal ? <PixelSprite name="it_crown" cell={2} /> : null}
+                  <span className="text-[11px] font-medium" style={{ color: "var(--frp-ink-soft)" }}>
+                    {h.name}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
         {loc ? (
           <figure
             className={`mb-3 overflow-hidden rounded-[10px] ${loc.big ? "" : "float-right ml-3"}`}

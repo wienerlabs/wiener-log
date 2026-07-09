@@ -43,7 +43,21 @@ const COMMON: ItemDef[] = [
   { id: "ring", name: "Silver Ring", rarity: "rare", category: "treasure", sprite: "it_ring", desc: "Warm to the touch. It should not be." },
   { id: "gem", name: "Bloodstone", rarity: "rare", category: "treasure", sprite: "it_gem", desc: "A red that watches back." },
   { id: "gold_pouch", name: "Coin Pouch", rarity: "common", category: "treasure", sprite: "it_coin", desc: "Heavy in the way that changes people." },
+  { id: "arrows", name: "Arrows", rarity: "common", category: "consumable", sprite: "it_arrows", desc: "A quiver of arrows. A bow is dead weight without them." },
+  { id: "mace", name: "Mace", rarity: "common", category: "weapon", sprite: "it_mace", desc: "Blunt honesty for armored problems." },
+  { id: "spear", name: "Spear", rarity: "common", category: "weapon", sprite: "it_spear", desc: "Reach the enemy before the enemy reaches you." },
+  { id: "greatsword", name: "Greatsword", rarity: "uncommon", category: "weapon", sprite: "it_sword", desc: "Two hands, one terrible arc." },
+  { id: "crossbow", name: "Crossbow", rarity: "uncommon", category: "weapon", sprite: "it_bow", desc: "Slow to load, quick to end things. Needs bolts." },
+  { id: "warhammer", name: "Warhammer", rarity: "uncommon", category: "weapon", sprite: "it_mace", desc: "Turns plate into a problem for the wearer." },
+  { id: "rapier", name: "Rapier", rarity: "uncommon", category: "weapon", sprite: "it_dagger", desc: "A duelist's needle; finds the gap in any guard." },
+  { id: "chain_armor", name: "Chain Mail", rarity: "uncommon", category: "armor", sprite: "it_armor", desc: "Rings of iron. Worn, it turns blades aside." },
+  { id: "plate_armor", name: "Plate Armor", rarity: "rare", category: "armor", sprite: "it_armor", desc: "A wall you can walk in. Heavy, and it can break." },
 ];
+
+export function coinBreakdown(copper: number): { gold: number; silver: number; copper: number } {
+  const c = Math.max(0, Math.round(copper || 0));
+  return { gold: Math.floor(c / 100), silver: Math.floor((c % 100) / 10), copper: c % 10 };
+}
 
 export const SIN_WEAPONS: ItemDef[] = [
   {
@@ -173,6 +187,15 @@ const ITEM_NAME_TR: Record<string, string> = {
   ring: "Gümüş Yüzük",
   gem: "Kan Taşı",
   gold_pouch: "Altın Kese",
+  arrows: "Oklar",
+  mace: "Gürz",
+  spear: "Mızrak",
+  greatsword: "Pala",
+  crossbow: "Arbalet",
+  warhammer: "Savaş Çekici",
+  rapier: "Meç",
+  chain_armor: "Zincir Zırh",
+  plate_armor: "Plaka Zırh",
   sin_pride: "Göklerin Hükmü",
   sin_greed: "Mülkiyet Zinciri",
   sin_lust: "Kızıl Serenat",
@@ -202,6 +225,15 @@ const ITEM_DESC_TR: Record<string, string> = {
   ring: "Sıcak dokunuşlu gümüş bir yüzük. Gizli bir güç barındırır.",
   gem: "Geri bakan kızıl bir taş. Değeri ve tehlikesi büyük.",
   gold_pouch: "İnsanı değiştirecek ağırlıkta altın.",
+  arrows: "Bir sadak dolusu ok. Yay onlarsız ölü ağırlıktır.",
+  mace: "Zırhlı sorunlara küt bir dürüstlük.",
+  spear: "Düşman sana ulaşmadan sen ona uzan.",
+  greatsword: "İki el, tek korkunç yay.",
+  crossbow: "Yavaş dolar, hızlı bitirir. Cıvata ister.",
+  warhammer: "Plakayı, giyenin sorununa çevirir.",
+  rapier: "Düellocunun iğnesi; her siperin açığını bulur.",
+  chain_armor: "Demir halkalar. Giyilince bıçağı savurur.",
+  plate_armor: "İçinde yürüdüğün bir duvar. Ağır ve kırılabilir.",
   sin_pride: "İki elli kılıç. Kullanıcı kendini ne kadar üstün görürse o kadar keskinleşir. Kibir yozlaştırır.",
   sin_greed: "Zincirli tırpan. Kurbanının en değerli özelliğini çalar. Açgözlülük yozlaştırır.",
   sin_lust: "İkiz hançer. Dokunduğu herkesin iradesini zayıflatır. Şehvet yozlaştırır.",

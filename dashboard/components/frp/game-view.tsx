@@ -5,6 +5,7 @@ import { CharacterCard } from "@/components/frp/character-card";
 import { Transcript } from "@/components/frp/transcript";
 import { PixelSprite, PixelBar } from "@/components/frp/pixel";
 import { ThinkingDice } from "@/components/frp/dice";
+import { FireOverlay } from "@/components/frp/fire-overlay";
 import type { Campaign, Character, Turn } from "@/lib/frp/types";
 import {
   SendHorizontal,
@@ -40,6 +41,7 @@ export function GameView({
   const [mode, setMode] = useState<"action" | "talk">("talk");
   const [sending, setSending] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const [fireTrigger, setFireTrigger] = useState(0);
   const lastId = useRef(initialTurns.reduce((m, t) => Math.max(m, t.id), 0));
   const endRef = useRef<HTMLDivElement>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
@@ -66,6 +68,8 @@ export function GameView({
       if (d.turns.length) {
         setTurns((prev) => [...prev, ...d.turns]);
         lastId.current = d.turns.reduce((m, t) => Math.max(m, t.id), lastId.current);
+        if (d.turns.some((t) => t.kind === "narration" && (t.payload as { fire?: boolean } | null)?.fire))
+          setFireTrigger((f) => f + 1);
       } else if (d.turns.length === 0 && lastId.current > 0 && d.campaign.round === 0) {
         setTurns([]);
         lastId.current = 0;
@@ -132,6 +136,7 @@ export function GameView({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+      <FireOverlay trigger={fireTrigger} />
       <div className="min-w-0">
         <div
           className="mb-4 flex items-center justify-between rounded-[12px] px-4 py-2.5 text-[13px] font-medium"
@@ -160,6 +165,11 @@ export function GameView({
             <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--frp-danger)" }}>
               <Swords className="size-[14px]" strokeWidth={2} />
               {campaign.encounter.name}
+              {campaign.encounter.kind === "boss" ? (
+                <span className="rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide text-white" style={{ background: "var(--frp-danger)" }}>BOSS</span>
+              ) : campaign.encounter.kind === "dungeon" ? (
+                <span className="rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide" style={{ background: "var(--frp-corrupt)", color: "#fff" }}>ZİNDAN</span>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {campaign.encounter.enemies.map((e, i) => (

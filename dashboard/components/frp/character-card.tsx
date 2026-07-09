@@ -3,6 +3,7 @@ import {
   itemById,
   itemNameTr,
   itemDescTr,
+  coinBreakdown,
   RARITY_COLOR,
   RARITY_TR,
   SIN_COLOR,
@@ -11,7 +12,7 @@ import {
 import { CLASS_TR, RACE_TR } from "@/lib/frp/classes";
 import { houseById } from "@/lib/frp/houses";
 import type { Character, Sin } from "@/lib/frp/types";
-import { Skull } from "lucide-react";
+import { Skull, Shield, Coins } from "lucide-react";
 
 const SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", "sloth"];
 
@@ -105,7 +106,21 @@ export function CharacterCard({
 
       {!compact ? (
         <>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex items-center gap-3 text-[11px]" style={{ color: "var(--frp-muted)" }}>
+            <span className="inline-flex items-center gap-1" title="Zırh">
+              <Shield className="size-[12px]" strokeWidth={2} /> {c.armor}
+            </span>
+            {(() => {
+              const cb = coinBreakdown(c.gold);
+              return (
+                <span className="inline-flex items-center gap-1 tabular-nums" title="Altın / Gümüş / Bakır">
+                  <Coins className="size-[12px]" style={{ color: "var(--frp-xp)" }} strokeWidth={2} />
+                  {cb.gold}a {cb.silver}g {cb.copper}b
+                </span>
+              );
+            })()}
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {(c.inventory || []).slice(0, 10).map((it, i) => {
               const item = itemById(it.id);
               const color = item ? RARITY_COLOR[item.rarity] : "#8b949e";

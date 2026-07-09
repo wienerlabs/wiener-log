@@ -47,6 +47,7 @@ export interface Character {
   hp_max: number;
   mp_cur: number;
   mp_max: number;
+  armor: number;
   stats: Stats;
   inventory: InventoryItem[];
   status_effects: StatusEffect[];
@@ -69,6 +70,7 @@ export interface Enemy {
 export interface Encounter {
   active: boolean;
   name: string;
+  kind?: "mob" | "boss" | "dungeon";
   enemies: Enemy[];
 }
 
@@ -118,6 +120,8 @@ export interface Effect {
   mp_delta?: number;
   xp_delta?: number;
   gold_delta?: number;
+  armor_delta?: number;
+  armor_set?: number;
   add_items?: string[];
   remove_items?: string[];
   add_status?: StatusEffect[];
@@ -144,5 +148,13 @@ export interface GMResult {
   encounter?: Encounter | null;
   loot?: { handle: string; item: string }[];
   location?: string;
+  fire?: boolean;
+  heralds?: { name: string; house: string; royal?: boolean }[];
   next_turn?: string;
+}
+
+export interface Herald {
+  name: string;
+  house: string;
+  royal?: boolean;
 }

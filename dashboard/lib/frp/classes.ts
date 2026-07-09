@@ -54,7 +54,7 @@ export const CLASSES: ClassDef[] = [
     hp: 26,
     mp: 12,
     stats: { str: 11, dex: 15, con: 12, int: 10, wis: 13, cha: 9 },
-    items: ["bow", "dagger", "potion_health", "bread"],
+    items: ["bow", "arrows", "dagger", "potion_health"],
     ability: "Aimed Shot",
   },
   {
@@ -130,6 +130,28 @@ export const RACES: RaceDef[] = [
   { id: "tiefling", name: "Tiefling", blurb: "Born marked, already half-accused.", mods: { int: 1, cha: 1 } },
   { id: "goblin", name: "Goblin", blurb: "Small, sharp, and underestimated to the last.", mods: { dex: 2 } },
 ];
+
+export const CLASS_COIN: Record<string, number> = {
+  warrior: 40,
+  mage: 60,
+  rogue: 85,
+  ranger: 50,
+  cleric: 45,
+  warlock: 55,
+  assassin: 90,
+  tamer: 40,
+  necromancer: 55,
+};
+
+export const RACE_ITEMS: Record<string, string[]> = {
+  human: ["bread"],
+  half_elf: ["scroll"],
+  elf: ["arrows"],
+  dwarf: ["mace"],
+  orc: ["greatsword"],
+  goblin: ["dagger"],
+  tiefling: ["gem"],
+};
 
 export function classById(id: string): ClassDef | undefined {
   return CLASSES.find((c) => c.id === id);

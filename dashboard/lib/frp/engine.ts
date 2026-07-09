@@ -10,6 +10,7 @@ import {
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/frp/prompts";
 import { rollPool, rollDie } from "@/lib/frp/dice";
 import { locationByKey } from "@/lib/frp/locations";
+import { houseById } from "@/lib/frp/houses";
 import { SIN_LABEL_TR, itemNameTr } from "@/lib/frp/items";
 import type {
   Character,
@@ -40,7 +41,9 @@ const RESOLVE_TOOL = {
             hp_delta: { type: "number" },
             mp_delta: { type: "number" },
             xp_delta: { type: "number" },
-            gold_delta: { type: "number" },
+            gold_delta: { type: "number", description: "coin change in COPPER (100 copper = 1 gold, 10 copper = 1 silver)" },
+            armor_set: { type: "number", description: "set armor points to this exact value (only when armor is worn or fully broken to 0)" },
+            armor_delta: { type: "number", description: "change armor points (negative when armor is damaged)" },
             add_items: { type: "array", items: { type: "string" } },
             remove_items: { type: "array", items: { type: "string" } },
             add_status: {
@@ -109,11 +112,29 @@ const RESOLVE_TOOL = {
         description:
           "Key of a matching location image if the scene is clearly at one (big_city, outer_gate, courtyard, great_hall, blacksmith, market_square, watchtower); otherwise omit.",
       },
+      fire: {
+        type: "boolean",
+        description: "true if something is burning in this scene (a fire, blaze, or flames), so the table sees flames rise.",
+      },
+      heralds: {
+        type: "array",
+        description: "Notable house nobles or royalty PRESENT in this scene as NPCs, so their banner (and crown if royal) shows by their name.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            house: { type: "string", description: "house key: kanli_tac, kara_kuzgun, gumus_kurt, altin_aslan, yesil_yilan, kizil_gul" },
+            royal: { type: "boolean", description: "true if a king, queen, or crowned ruler" },
+          },
+          required: ["name", "house"],
+        },
+      },
       encounter: {
         type: "object",
         properties: {
           active: { type: "boolean" },
           name: { type: "string" },
+          kind: { type: "string", description: "mob, boss, or dungeon" },
           enemies: {
             type: "array",
             items: {
@@ -165,6 +186,8 @@ function applyEffect(c: Character, e: Effect): string[] {
   if (e.mp_delta) c.mp_cur = clamp(c.mp_cur + e.mp_delta, 0, c.mp_max);
   if (e.xp_delta) c.xp = Math.max(0, c.xp + e.xp_delta);
   if (e.gold_delta) c.gold = Math.max(0, c.gold + e.gold_delta);
+  if (e.armor_set !== undefined) c.armor = Math.max(0, Math.round(e.armor_set));
+  if (e.armor_delta) c.armor = Math.max(0, c.armor + e.armor_delta);
   if (e.add_items) for (const id of e.add_items) c.inventory.push({ id });
   if (e.remove_items)
     for (const id of e.remove_items) {
@@ -225,6 +248,7 @@ function applyEffect(c: Character, e: Effect): string[] {
 async function callGM(
   model: string,
   userPrompt: string,
+  maxTokens: number,
 ): Promise<GMResult | null> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
@@ -238,7 +262,8 @@ async function callGM(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1000,
+        max_tokens: maxTokens,
+        temperature: 0.85,
         system: SYSTEM_PROMPT,
         tools: [RESOLVE_TOOL],
         tool_choice: { type: "tool", name: "resolve_turn" },
@@ -288,7 +313,8 @@ export async function resolveTurn(
     pool,
     wild,
   );
-  const gm = await callGM(model, userPrompt);
+  const maxTokens = opts.isOpening ? 1200 : 640;
+  const gm = await callGM(model, userPrompt, maxTokens);
 
   if (!gm) {
     await appendTurn(
@@ -328,17 +354,36 @@ export async function resolveTurn(
     }
   }
 
+  const necros = characters.filter(
+    (c) => (c.class === "necromancer" || c.class2 === "necromancer") && c.alive,
+  );
+  for (const n of necros) {
+    const cap = Math.floor(n.level / 3) + 1;
+    const raised = characters.filter((c) => c.controlled_by === n.handle);
+    if (raised.length > cap)
+      for (const r of raised.slice(cap)) r.controlled_by = null;
+  }
+
   for (const c of characters) await saveCharacter(c);
 
   const narration = noDash(gm.narration || "");
   const rolls = gm.rolls || [];
   const location = gm.location && locationByKey(gm.location) ? gm.location : null;
+  const fire =
+    !!gm.fire ||
+    /(yan[ıi]yor|yang[ıi]n|alev|tutu[şs]|ate[şs]e ver|k[üu]l ol|yak[ıi]l|cehennem)/i.test(
+      narration,
+    );
+  const heralds = (gm.heralds || [])
+    .filter((h) => h && h.name && houseById(h.house))
+    .slice(0, 6)
+    .map((h) => ({ name: noDash(h.name), house: h.house, royal: !!h.royal }));
   await appendTurn(
     campaignId,
     "gm",
     "narration",
     narration,
-    { rolls, dice: pool, loot: gm.loot || [], location },
+    { rolls, dice: pool, loot: gm.loot || [], location, fire, heralds },
     campaign.round,
   );
   for (const lt of gm.loot || []) {
@@ -354,6 +399,7 @@ export async function resolveTurn(
       encounter = {
         active: true,
         name: noDash(gm.encounter.name),
+        kind: gm.encounter.kind === "boss" || gm.encounter.kind === "dungeon" ? gm.encounter.kind : "mob",
         enemies: (gm.encounter.enemies || []).map((en) => ({
           name: noDash(en.name),
           sprite: enemySprite(en.name),
