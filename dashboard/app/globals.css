@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: var(--font-funnel), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
   --color-ink: #0a0a0a;
@@ -12,7 +12,12 @@
   --color-line: #ececec;
   --color-line-soft: #f4f4f5;
   --color-surface: #ffffff;
+  --color-raised: #ffffff;
   --color-canvas: #fbfbfd;
+  --color-ring: rgba(0, 0, 0, 0.06);
+  --color-btn: #0a0a0a;
+  --color-btn-fg: #ffffff;
+  --color-glass: rgba(255, 255, 255, 0.7);
   --color-accent: #0071e3;
   --color-accent-soft: #eaf3fe;
 
@@ -24,6 +29,61 @@
   --color-danger-soft: #fbeae8;
   --color-info: #0060b0;
   --color-info-soft: #e9f2fb;
+
+  --color-purple: #7b3fbf;
+  --color-purple-soft: #f3ecfb;
+  --color-sidewinder: #2b56b8;
+  --color-sidewinder-soft: #eef4ff;
+}
+
+:root {
+  color-scheme: light;
+
+  --heat-0: #eaeef2;
+  --heat-1: #cfe4fb;
+  --heat-2: #96c8f5;
+  --heat-3: #4a97ec;
+  --heat-4: #0071e3;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-ink: #e6edf3;
+  --color-ink-soft: #c9d1d9;
+  --color-muted: #8b949e;
+  --color-faint: #6e7681;
+  --color-line: #30363d;
+  --color-line-soft: #21262d;
+  --color-surface: #161b22;
+  --color-raised: #2d333b;
+  --color-canvas: #0d1117;
+  --color-ring: #30363d;
+  --color-btn: #e6edf3;
+  --color-btn-fg: #0d1117;
+  --color-glass: rgba(13, 17, 23, 0.72);
+  --color-accent: #2f81f7;
+  --color-accent-soft: #132a45;
+
+  --color-ok: #3fb950;
+  --color-ok-soft: #0f2417;
+  --color-warn: #d29922;
+  --color-warn-soft: #272015;
+  --color-danger: #f85149;
+  --color-danger-soft: #2d1717;
+  --color-info: #58a6ff;
+  --color-info-soft: #132a45;
+
+  --color-purple: #a371f7;
+  --color-purple-soft: #21193a;
+  --color-sidewinder: #58a6ff;
+  --color-sidewinder-soft: #132a45;
+
+  --heat-0: #161b22;
+  --heat-1: #0d2847;
+  --heat-2: #1f4e8c;
+  --heat-3: #2f81f7;
+  --heat-4: #58a6ff;
 }
 
 * {
@@ -41,6 +101,9 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   letter-spacing: -0.011em;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 ::selection {
@@ -60,6 +123,12 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #b8b8bf;
 }
+.dark ::-webkit-scrollbar-thumb {
+  background: #30363d;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
 
 @keyframes rise {
   from {
@@ -74,4 +143,79 @@ body {
 
 .rise {
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.doc-prose .ProseMirror {
+  outline: none;
+  min-height: 340px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-ink-soft);
+}
+.doc-prose .ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+.doc-prose h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  margin-top: 1em;
+}
+.doc-prose h2 {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-top: 1em;
+}
+.doc-prose h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.doc-prose ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.doc-prose ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.doc-prose li {
+  margin: 0.2em 0;
+}
+.doc-prose code {
+  background: var(--color-line-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+.doc-prose pre {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.doc-prose pre code {
+  background: none;
+  padding: 0;
+}
+.doc-prose blockquote {
+  border-left: 3px solid var(--color-line);
+  padding-left: 12px;
+  color: var(--color-muted);
+}
+.doc-prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.doc-prose .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
 }

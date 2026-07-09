@@ -38,3 +38,12 @@ export function shortDate(iso: string): string {
 export function shortId(id: string): string {
   return id.replace(/-/g, "").slice(0, 8);
 }
+
+export function formatMinutes(min: number): string {
+  const m = Math.round(min);
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r}m`;
+  if (r === 0) return `${h}h`;
+  return `${h}h ${r}m`;
+}

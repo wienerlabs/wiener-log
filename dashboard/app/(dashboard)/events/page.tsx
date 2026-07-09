@@ -1,11 +1,17 @@
-import { getRecentEvents, type EventSource } from "@/lib/db";
+import {
+  getRecentEvents,
+  getRecentSessions,
+  type EventSource,
+} from "@/lib/db";
 import { relativeTime } from "@/lib/utils";
 import {
   Card,
   PageHeader,
+  SectionHeader,
   SourcePill,
   EmptyState,
 } from "@/components/ui";
+import { SessionsTable } from "@/components/sessions-table";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -25,15 +31,33 @@ export default async function EventsPage({
 }) {
   const { source } = await searchParams;
   const active = filters.find((f) => f.key === source) ?? filters[0];
-  const events = await getRecentEvents(120, { source: active.source });
+  const [events, sessions] = await Promise.all([
+    getRecentEvents(120, { source: active.source }),
+    getRecentSessions(50),
+  ]);
 
   return (
     <div className="rise">
       <PageHeader
         title="Events"
-        subtitle="The raw firehose: git, Claude Code, and GitHub activity."
+        subtitle="Sign-in activity and the raw git, Claude Code and GitHub firehose."
       />
 
+      <div className="mb-8">
+        <SectionHeader
+          title="Sign-in activity"
+          action={<span>{sessions.length} recent sessions</span>}
+        />
+        <Card className="overflow-hidden">
+          <SessionsTable rows={sessions} />
+        </Card>
+        <p className="mt-2 text-[12px] text-[var(--color-faint)]">
+          Active means seen in the last few minutes. A closed tab shows as Left
+          at the last time it checked in.
+        </p>
+      </div>
+
+      <SectionHeader title="Activity firehose" />
       <div className="mb-5 flex flex-wrap gap-1.5">
         {filters.map((f) => (
           <Link
@@ -42,8 +66,8 @@ export default async function EventsPage({
             className={cn(
               "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
               active.key === f.key
-                ? "bg-[var(--color-ink)] text-white"
-                : "bg-white text-[var(--color-ink-soft)] ring-1 ring-black/[0.06] hover:bg-[var(--color-line-soft)]",
+                ? "bg-[var(--color-btn)] text-[var(--color-btn-fg)]"
+                : "bg-[var(--color-surface)] text-[var(--color-ink-soft)] ring-1 ring-[var(--color-ring)] hover:bg-[var(--color-line-soft)]",
             )}
           >
             {f.label}

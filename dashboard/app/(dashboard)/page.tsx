@@ -1,96 +1,197 @@
 import {
-  getOverview,
+  getGhStats,
   getEventsByDay,
-  getTasksByStatus,
+  getContribHeatmap,
+  getLanguageFootprint,
+  getPinnedRepos,
+  getGhPulls,
+  getIssuePriorityCounts,
   getRecentEvents,
+  getTopActiveProjects,
+  getProjectSuggestions,
 } from "@/lib/db";
 import { formatNumber, relativeTime } from "@/lib/utils";
 import {
   Card,
-  StatCard,
   SectionHeader,
   PageHeader,
   SourcePill,
-  StatusPill,
+  Heatmap,
+  MiniBars,
+  RepoCard,
+  LanguageDot,
+  langColor,
   EmptyState,
 } from "@/components/ui";
-import { EventsChart } from "@/components/events-chart";
+import { getStalePulls, getUnassignedCritical } from "@/lib/digest";
+import { getSession } from "@/lib/session";
+import { EmployeeHome } from "@/components/employee-home";
+import { NeedsAttention } from "@/components/needs-attention";
+import { ProjectSuggestions } from "@/components/project-suggestions";
+import { PinnedBanner } from "@/components/pinned-banner";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
-  const [ov, days, statuses, events] = await Promise.all([
-    getOverview(),
+export default async function HomePage() {
+  const session = await getSession();
+  if (session && session.role !== "admin") {
+    return <EmployeeHome handle={session.handle} />;
+  }
+
+  const [
+    stats,
+    days,
+    heat,
+    langs,
+    pinned,
+    pulls,
+    priorities,
+    events,
+    stalePulls,
+    unassigned,
+  ] = await Promise.all([
+    getGhStats(),
     getEventsByDay(14),
-    getTasksByStatus(),
-    getRecentEvents(12),
+    getContribHeatmap(26),
+    getLanguageFootprint(),
+    getPinnedRepos(6),
+    getGhPulls(),
+    getIssuePriorityCounts(),
+    getRecentEvents(8),
+    getStalePulls(7, 8),
+    getUnassignedCritical(8),
   ]);
 
-  const statusTotal = statuses.reduce((a, s) => a + s.count, 0);
+  const topProjects = await getTopActiveProjects(3);
+  const suggestionGroups = await Promise.all(
+    topProjects.map(async (p) => ({
+      name: p.name,
+      full_name: p.full_name,
+      language: p.language,
+      suggestions: await getProjectSuggestions(p.full_name),
+    })),
+  );
+
+  const reposBars = langs.slice(0, 7).map((l) => l.repos);
+  const pullsByRepo = new Map<string, number>();
+  for (const p of pulls)
+    pullsByRepo.set(p.repo, (pullsByRepo.get(p.repo) ?? 0) + 1);
+  const pullsBars = [...pullsByRepo.values()].sort((a, b) => b - a).slice(0, 7);
+  const issuesBars = priorities.map((p) => p.count);
+  const activityBars = days.map((d) => d.total);
+  const langTotal = langs.reduce((a, l) => a + l.repos, 0) || 1;
+  const heatTotal = heat.reduce((a, c) => a + c.count, 0);
 
   return (
     <div className="rise">
+      <PinnedBanner />
       <PageHeader
-        title="Overview"
-        subtitle="Everything the org shipped, observed in real time."
+        title="Your mainline pulse"
+        subtitle="What wienerlabs and Sidewinder shipped, observed live."
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          label="Events today"
-          value={formatNumber(ov.events_today)}
-          sub={`${formatNumber(ov.events_7d)} this week`}
-          accent
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <PulseCard
+          href="/repos"
+          label="Repositories"
+          value={formatNumber(stats.repos)}
+          sub={`${stats.public_repos} public · ${stats.private_repos} private`}
+          bars={reposBars}
         />
-        <StatCard label="Events total" value={formatNumber(ov.events_total)} />
-        <StatCard label="Tasks" value={formatNumber(ov.tasks_total)} />
-        <StatCard label="Members" value={formatNumber(ov.members_total)} />
-        <StatCard label="Workspaces" value={formatNumber(ov.workspaces_total)} />
-        <StatCard label="Repos" value={formatNumber(ov.repos_total)} />
+        <PulseCard
+          href="/pulls"
+          label="Open pull requests"
+          value={formatNumber(stats.pulls)}
+          sub={`across ${pullsByRepo.size} repositories`}
+          bars={pullsBars.length ? pullsBars : [1]}
+        />
+        <PulseCard
+          href="/issues"
+          label="Open issues"
+          value={formatNumber(stats.issues)}
+          sub={`${priorities[0].count} critical · ${priorities[1].count} high`}
+          bars={issuesBars}
+        />
+        <PulseCard
+          href="/events"
+          label="Events, 14 days"
+          value={formatNumber(activityBars.reduce((a, b) => a + b, 0))}
+          sub={`${stats.members} members · ${stats.orgs} orgs`}
+          bars={activityBars}
+        />
+      </div>
+
+      <div className="mt-8">
+        <ProjectSuggestions groups={suggestionGroups} />
+      </div>
+
+      <div className="mt-8">
+        <NeedsAttention stalePulls={stalePulls} unassigned={unassigned} />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <SectionHeader title="Activity" action={<span>Last 14 days</span>} />
+          <SectionHeader
+            title="Contribution activity"
+            action={<span>{formatNumber(heatTotal)} events, 26 weeks</span>}
+          />
           <Card className="p-5">
-            <div className="mb-4 flex flex-wrap gap-4 text-[12px] text-[var(--color-muted)]">
-              <Legend color="#0071e3" label="GitHub" />
-              <Legend color="#a1a1aa" label="Git" />
-              <Legend color="#7b3fbf" label="Claude Code" />
+            <Heatmap cells={heat} />
+            <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-[var(--color-faint)]">
+              <span>Less</span>
+              {["var(--heat-0)", "var(--heat-1)", "var(--heat-2)", "var(--heat-3)", "var(--heat-4)"].map(
+                (c) => (
+                  <span
+                    key={c}
+                    className="size-[11px] rounded-[3px] ring-1 ring-[var(--color-ring)]"
+                    style={{ backgroundColor: c }}
+                  />
+                ),
+              )}
+              <span>More</span>
             </div>
-            <EventsChart data={days} />
           </Card>
         </div>
 
         <div>
-          <SectionHeader title="Tasks by status" />
+          <SectionHeader
+            title="Language footprint"
+            action={<span>{stats.languages} languages</span>}
+          />
           <Card className="p-5">
-            {statusTotal === 0 ? (
-              <div className="py-8 text-center text-[13px] text-[var(--color-faint)]">
-                No tasks yet. The engine proposes them once an Anthropic key
-                is set.
+            {langs.length === 0 ? (
+              <div className="py-6 text-center text-[13px] text-[var(--color-faint)]">
+                No languages detected yet.
               </div>
             ) : (
-              <div className="flex flex-col gap-3.5">
-                {statuses.map((s) => (
-                  <div key={s.status}>
-                    <div className="flex items-center justify-between">
-                      <StatusPill status={s.status} />
-                      <span className="text-[13px] font-semibold tabular-nums text-[var(--color-ink)]">
-                        {s.count}
+              <div className="flex flex-col gap-3">
+                <div className="flex h-2.5 overflow-hidden rounded-full">
+                  {langs.slice(0, 8).map((l) => (
+                    <span
+                      key={l.language}
+                      title={`${l.language} · ${l.repos}`}
+                      style={{
+                        width: `${(l.repos / langTotal) * 100}%`,
+                        backgroundColor: langColor(l.language),
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-2 pt-1">
+                  {langs.slice(0, 7).map((l) => (
+                    <div
+                      key={l.language}
+                      className="flex items-center justify-between"
+                    >
+                      <LanguageDot language={l.language} />
+                      <span className="text-[12.5px] font-medium tabular-nums text-[var(--color-ink-soft)]">
+                        {Math.round((l.repos / langTotal) * 100)}%
                       </span>
                     </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--color-line-soft)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--color-ink)]/80 transition-all duration-700"
-                        style={{
-                          width: `${statusTotal ? (s.count / statusTotal) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </Card>
@@ -99,7 +200,26 @@ export default async function OverviewPage() {
 
       <div className="mt-8">
         <SectionHeader
-          title="Recent events"
+          title="Pinned repositories"
+          action={
+            <Link
+              href="/repos"
+              className="text-[var(--color-accent)] transition-opacity hover:opacity-70"
+            >
+              View all
+            </Link>
+          }
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {pinned.map((r) => (
+            <RepoCard key={r.full_name} repo={r} />
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <SectionHeader
+          title="Recent signals"
           action={
             <Link
               href="/events"
@@ -131,16 +251,6 @@ export default async function OverviewPage() {
                     <td className="hidden max-w-[220px] truncate py-3 pr-3 text-[var(--color-muted)] sm:table-cell">
                       {e.label ?? ""}
                     </td>
-                    <td className="hidden py-3 pr-3 sm:table-cell">
-                      {e.workspace_slug ? (
-                        <Link
-                          href={`/workspaces/${e.workspace_slug}`}
-                          className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
-                        >
-                          {e.workspace_slug}
-                        </Link>
-                      ) : null}
-                    </td>
                     <td className="w-0 whitespace-nowrap py-3 pr-5 text-right text-[12.5px] text-[var(--color-faint)]">
                       {relativeTime(e.ingested_at)}
                     </td>
@@ -155,14 +265,37 @@ export default async function OverviewPage() {
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function PulseCard({
+  href,
+  label,
+  value,
+  sub,
+  bars,
+}: {
+  href: string;
+  label: string;
+  value: string;
+  sub: ReactNode;
+  bars: number[];
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className="inline-block size-2 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      {label}
-    </span>
+    <Link href={href} className="block">
+      <Card className="p-5 transition-transform duration-300 ease-out hover:-translate-y-0.5">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[13px] font-medium text-[var(--color-muted)]">
+              {label}
+            </div>
+            <div className="mt-2 text-[32px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--color-ink)]">
+              {value}
+            </div>
+          </div>
+          <div className="w-[42%]">
+            <MiniBars data={bars} />
+          </div>
+        </div>
+        <div className="mt-3 text-[12px] text-[var(--color-faint)]">{sub}</div>
+      </Card>
+    </Link>
   );
 }

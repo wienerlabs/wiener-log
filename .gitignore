@@ -54,3 +54,5 @@ docker-compose.override.yml
 *.p12
 *credentials*.json
 !**/test_credentials.json
+
+.mcp.json

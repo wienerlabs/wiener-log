@@ -1,6 +1,14 @@
-import { getMembers, getOrgs } from "@/lib/db";
+import { getMembers, getOrgs, getTeamPresence } from "@/lib/db";
 import { relativeTime, cn } from "@/lib/utils";
-import { Card, PageHeader, EmptyState, Avatar, OrgBadge } from "@/components/ui";
+import {
+  Card,
+  PageHeader,
+  SectionHeader,
+  EmptyState,
+  Avatar,
+  OrgBadge,
+} from "@/components/ui";
+import { TeamPresence } from "@/components/team-presence";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
@@ -12,7 +20,11 @@ export default async function MembersPage({
   searchParams: Promise<{ org?: string }>;
 }) {
   const { org } = await searchParams;
-  const [orgs, members] = await Promise.all([getOrgs(), getMembers(org)]);
+  const [orgs, members, presence] = await Promise.all([
+    getOrgs(),
+    getMembers(org),
+    getTeamPresence(),
+  ]);
 
   const tabs = [
     { org: "All members", key: undefined as string | undefined },
@@ -24,6 +36,11 @@ export default async function MembersPage({
         title="Members"
         subtitle="GitHub org members. Click anyone to view their work and assign tasks."
       />
+
+      <div className="mb-8">
+        <SectionHeader title="Team presence" />
+        <TeamPresence rows={presence} />
+      </div>
 
       <div className="mb-5 flex flex-wrap gap-1.5">
         {tabs.map((t) => {
@@ -37,8 +54,8 @@ export default async function MembersPage({
               className={cn(
                 "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
                 active
-                  ? "bg-[var(--color-ink)] text-white"
-                  : "bg-white text-[var(--color-ink-soft)] ring-1 ring-black/[0.06] hover:bg-[var(--color-line-soft)]",
+                  ? "bg-[var(--color-btn)] text-[var(--color-btn-fg)]"
+                  : "bg-[var(--color-surface)] text-[var(--color-ink-soft)] ring-1 ring-[var(--color-ring)] hover:bg-[var(--color-line-soft)]",
               )}
             >
               {t.org}
