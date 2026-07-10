@@ -210,6 +210,22 @@ export function GameView({
     setSending(false);
   };
 
+  const battleAbility = async (ability: string, target: string) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await fetch(`/api/frp/${id}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ battleAbility: { ability, target } }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+    setSending(false);
+  };
+
   const travel = async (nodeKey: string) => {
     if (sending) return;
     setSending(true);
@@ -310,7 +326,7 @@ export function GameView({
             </div>
             {campaign.encounter.arena ? (
               <div className="mt-3">
-                <BattleMap campaign={campaign} characters={characters} me={me} onBattleMove={battleMove} busy={sending} />
+                <BattleMap campaign={campaign} characters={characters} me={me} onBattleMove={battleMove} onBattleAbility={battleAbility} busy={sending} />
               </div>
             ) : null}
           </div>

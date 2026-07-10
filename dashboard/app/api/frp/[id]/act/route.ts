@@ -18,8 +18,10 @@ import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR, geographyQuests } from "@/lib/frp/movement";
 import { stackInventory, removeFromInventory } from "@/lib/frp/items";
-import { arenaReachable, battleMoveBudget } from "@/lib/frp/battle";
-import type { Campaign, Quest } from "@/lib/frp/types";
+import { arenaReachable, battleMoveBudget, stepEnemies, isHighGround } from "@/lib/frp/battle";
+import { abilityById, hasLoS, aoeHexes, inRange, rollDamage, enemyAttackPower, hasShield, isStunned, tickEnemyStatus } from "@/lib/frp/abilities";
+import { axialDistance, parseKey } from "@/lib/frp/hex";
+import type { Campaign, Quest, StatusEffect } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -70,6 +72,7 @@ export async function POST(
     hexTravel?: string;
     camp?: boolean;
     battleMove?: string;
+    battleAbility?: { ability?: string; target?: string };
   };
 
   if (body.control) {
@@ -341,6 +344,153 @@ export async function POST(
     await updateCampaign(campaignId, fields(campaign, { encounter: nextEnc }));
     await appendTurn(campaignId, "system", "combat", `${ch.name} savaş alanında mevzi değiştirdi.`, null, campaign.round);
     return Response.json({ ok: true });
+  }
+
+  if (body.battleAbility?.ability) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    if (campaign.current_turn !== handle)
+      return Response.json({ error: "not your turn" }, { status: 409 });
+    const enc = campaign.encounter;
+    const arena = enc?.active ? enc.arena : undefined;
+    if (!arena || !enc) return Response.json({ error: "savaş alanı yok" }, { status: 400 });
+    const ch = await getCharacter(campaignId, handle);
+    if (!ch || !ch.alive) return Response.json({ error: "no living character" }, { status: 400 });
+    const ability = abilityById(String(body.battleAbility.ability), ch.abilities);
+    if (!ability) return Response.json({ error: "böyle bir yeteneğin yok" }, { status: 400 });
+    if ((ch.mp_cur || 0) < ability.mp) return Response.json({ error: "manan yetmiyor" }, { status: 400 });
+    const from = arena.party[handle];
+    if (!from) return Response.json({ error: "savaşta konumun yok" }, { status: 400 });
+
+    const chars = await getCharacters(campaignId);
+    const byHandle = new Map(chars.map((c) => [c.handle, c]));
+    const enemies = enc.enemies;
+    const target = ability.target === "self" ? from : String(body.battleAbility.target || "");
+    if (!target) return Response.json({ error: "hedef seç" }, { status: 400 });
+
+    if (ability.target === "enemy") {
+      const idx = arena.enemies.findIndex((k) => k === target);
+      if (idx < 0 || !(enemies[idx] && enemies[idx].hp > 0)) return Response.json({ error: "orada düşman yok" }, { status: 400 });
+      if (!inRange(from, target, ability.range)) return Response.json({ error: "menzil dışı" }, { status: 400 });
+      if (ability.needsLoS && !hasLoS(arena, from, target)) return Response.json({ error: "hedefe görüş hattın yok" }, { status: 400 });
+    } else if (ability.target === "ally") {
+      const ally = Object.entries(arena.party).find(([, k]) => k === target);
+      if (!ally || !byHandle.get(ally[0])?.alive) return Response.json({ error: "orada müttefik yok" }, { status: 400 });
+      if (!inRange(from, target, ability.range)) return Response.json({ error: "menzil dışı" }, { status: 400 });
+    }
+
+    const log: string[] = [];
+    const saveChars = new Set<string>([handle]);
+    const applyStatus = (list: StatusEffect[] | undefined, s: StatusEffect): StatusEffect[] => {
+      const kept = (list || []).filter((x) => x.id !== s.id);
+      kept.push({ id: s.id, label: s.label, turns: s.turns });
+      return kept;
+    };
+    const salt = campaignId * 131 + campaign.round * 17 + handle.length * 7 + target.split(",").reduce((a, b) => a + Number(b), 0);
+    const area = new Set(aoeHexes(target, ability.aoe));
+    const highGround = isHighGround(arena.terrain[from]);
+
+    if (ability.kind === "attack" || ability.kind === "spell") {
+      let hitAny = false;
+      enemies.forEach((e, i) => {
+        if (e.hp <= 0 || !area.has(arena.enemies[i])) return;
+        hitAny = true;
+        const dmg = rollDamage(ability.power + (highGround ? 2 : 0), salt + i);
+        e.hp = Math.max(0, e.hp - dmg);
+        if (ability.status && e.hp > 0) e.status = applyStatus(e.status, ability.status);
+        log.push(`${ch.name}, ${ability.tr} ile ${e.name} üzerine ${dmg} hasar${ability.status && e.hp > 0 ? ` (${ability.status.label})` : ""}${e.hp <= 0 ? " — düştü!" : ""}.`);
+      });
+      if (!hitAny) return Response.json({ error: "hedefte düşman yok" }, { status: 400 });
+    } else if (ability.kind === "heal") {
+      for (const [hnd, k] of Object.entries(arena.party)) {
+        if (!area.has(k)) continue;
+        const c = byHandle.get(hnd);
+        if (!c || !c.alive) continue;
+        const before = c.hp_cur;
+        c.hp_cur = Math.min(c.hp_max, c.hp_cur + ability.power);
+        saveChars.add(hnd);
+        log.push(`${ch.name}, ${ability.tr} ile ${c.name} için ${c.hp_cur - before} can doldurdu.`);
+      }
+    } else if (ability.kind === "buff") {
+      const targets = ability.target === "self" ? [handle] : Object.entries(arena.party).filter(([, k]) => area.has(k)).map(([h]) => h);
+      for (const hnd of targets) {
+        const c = byHandle.get(hnd);
+        if (!c || !c.alive) continue;
+        if (ability.status) {
+          c.status_effects = applyStatus(c.status_effects, ability.status);
+          saveChars.add(hnd);
+        }
+        log.push(`${c.name}, ${ability.status?.label || ability.tr} kazandı.`);
+      }
+    }
+
+    ch.mp_cur = Math.max(0, (ch.mp_cur || 0) - ability.mp);
+    const alive = () => enemies.filter((e) => e.hp > 0);
+    let victory = alive().length === 0;
+
+    if (!victory) {
+      enemies.forEach((e) => {
+        if (e.hp <= 0) return;
+        const t = tickEnemyStatus(e.status);
+        e.status = t.status;
+        if (t.dmg) {
+          e.hp = Math.max(0, e.hp - t.dmg);
+          if (e.hp <= 0) log.push(`${e.name} durum etkisinden düştü.`);
+        }
+      });
+      const partyAlive = () => Object.entries(arena.party).filter(([h]) => byHandle.get(h)?.alive);
+      enemies.forEach((e, i) => {
+        if (e.hp <= 0) return;
+        if (isStunned(e.status)) {
+          log.push(`${e.name} sersemledi, saldıramadı.`);
+          return;
+        }
+        const ek = arena.enemies[i];
+        if (!ek) return;
+        const near = partyAlive().map(([h, k]) => ({ h, k, d: axialDistance(parseKey(ek), parseKey(k)) })).sort((a, b) => a.d - b.d)[0];
+        if (!near || near.d > 1) return;
+        const tgt = byHandle.get(near.h);
+        if (!tgt) return;
+        const shielded = hasShield(tgt.status_effects);
+        let dmg = enemyAttackPower(e.hp_max) + (e.telegraph ? 2 : 0);
+        if (shielded) dmg = Math.round(dmg * 0.5);
+        tgt.hp_cur = Math.max(0, tgt.hp_cur - dmg);
+        saveChars.add(near.h);
+        log.push(`${e.name}, ${tgt.name} üzerine ${dmg} hasar${shielded ? " (kalkan yumuşattı)" : ""}${tgt.hp_cur <= 0 ? ` — ${tgt.name} düştü!` : ""}.`);
+      });
+      arena.enemies = stepEnemies(arena, enemies, campaign.map_seed || `c${campaignId}`, campaign.round);
+      for (const c of chars) if (c.hp_cur <= 0 && c.alive) { c.alive = false; saveChars.add(c.handle); }
+      victory = alive().length === 0;
+    }
+
+    if (victory) log.push("Son düşman da düştü. Savaş kazanıldı.");
+    arena.moved = [];
+    const nextEnc = victory ? null : { ...enc, arena, enemies };
+
+    for (const h of saveChars) {
+      const c = byHandle.get(h);
+      if (c) await saveCharacter(c);
+    }
+
+    const livingParty = campaign.turn_order.filter((h) => byHandle.get(h)?.alive);
+    let round = campaign.round;
+    let next = handle;
+    if (livingParty.length) {
+      const idx = livingParty.indexOf(handle);
+      const ni = (idx + 1) % livingParty.length;
+      next = livingParty[ni];
+      if (ni === 0) round += 1;
+    }
+    await updateCampaign(campaignId, fields(campaign, { encounter: nextEnc, current_turn: next, round }));
+    for (const line of log.slice(0, 8)) await appendTurn(campaignId, "system", "combat", line, null, campaign.round);
+    if (next && next !== handle) {
+      try {
+        await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });
+      } catch {
+        /* best effort */
+      }
+    }
+    return Response.json({ ok: true, victory });
   }
 
   const text = String(body.text || "").slice(0, 1500).trim();

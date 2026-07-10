@@ -68,6 +68,7 @@ export interface Enemy {
   hp: number;
   hp_max: number;
   telegraph?: string;
+  status?: StatusEffect[];
 }
 
 export type ArenaTerrain = "rock" | "tree" | "water" | "high" | "ember";
