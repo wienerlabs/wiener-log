@@ -9,6 +9,8 @@ import type { Army, Caravan } from "@/lib/frp/worldsim";
 import type { Campaign, Character } from "@/lib/frp/types";
 import { Maximize2, X, CloudSun, Moon, Tent, Plus, Minus, Crosshair } from "lucide-react";
 import { drawPortraitToken } from "@/components/frp/portrait-token";
+import { lootSites } from "@/lib/frp/loot";
+import type { LootSite } from "@/lib/frp/loot";
 
 const SQRT3 = Math.sqrt(3);
 
@@ -86,6 +88,8 @@ function Canvas({
   caravans,
   corruption,
   control,
+  loot,
+  looted,
   interactive,
   onHexClick,
   onOpenFull,
@@ -100,6 +104,8 @@ function Canvas({
   caravans: Caravan[];
   corruption: Set<string>;
   control: Record<string, string>;
+  loot: LootSite[];
+  looted: Set<string>;
   interactive: boolean;
   onHexClick?: (key: string) => void;
   onOpenFull?: () => void;
@@ -289,6 +295,31 @@ function Canvas({
         }
       }
 
+      for (const l of loot) {
+        const k = `${l.q},${l.r}`;
+        if (looted.has(k) || !discovered.has(k)) continue;
+        const t = map.tiles.find((x) => x.q === l.q && x.r === l.r);
+        if (!t) continue;
+        const { x, y } = tileCenter(t, size, ox, oy);
+        const w = Math.max(4, size * 0.62), h = w * 0.78, top = y - h * 0.5;
+        if (l.tier >= 3) {
+          ctx.beginPath();
+          ctx.arc(x, y, w * 0.95, 0, Math.PI * 2);
+          ctx.fillStyle = l.tier >= 4 ? "rgba(224,90,120,0.28)" : "rgba(224,182,77,0.24)";
+          ctx.fill();
+        }
+        ctx.fillStyle = "#5a3a1e";
+        ctx.fillRect(x - w / 2, top + h * 0.32, w, h * 0.68);
+        ctx.fillStyle = "#7a4e26";
+        ctx.fillRect(x - w / 2, top, w, h * 0.4);
+        ctx.fillStyle = "#e0b64d";
+        ctx.fillRect(x - w / 2, top + h * 0.3, w, Math.max(1.5, h * 0.14));
+        ctx.fillRect(x - w * 0.12, top + h * 0.24, w * 0.24, h * 0.34);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.strokeRect(x - w / 2, top, w, h);
+      }
+
       const seenCount = new Map<string, number>();
       for (const c of characters) {
         if (!c.alive) continue;
@@ -323,7 +354,7 @@ function Canvas({
     });
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [map, characters, me, discovered, discoveredPois, reachSet, armies, caravans, corruption, control, hover, interactive, poiByRC, tick]);
+  }, [map, characters, me, discovered, discoveredPois, reachSet, armies, caravans, corruption, control, loot, looted, hover, interactive, poiByRC, tick]);
 
   const pick = (clientX: number, clientY: number): { t: Tile; poi: Poi | null } | null => {
     const canvas = canvasRef.current;
@@ -494,7 +525,7 @@ function Canvas({
             </div>
           ) : null}
           <div style={{ color: "#9fb0c0" }}>
-            {discovered.has(`${hover.t.q},${hover.t.r}`) ? `${biomeLabel(hover.t.biome)} · tehlike ${hover.t.danger}${reachSet?.has(`${hover.t.q},${hover.t.r}`) ? " · gidilebilir" : ""}` : "keşfedilmemiş"}
+            {discovered.has(`${hover.t.q},${hover.t.r}`) ? `${biomeLabel(hover.t.biome)} · tehlike ${hover.t.danger}${reachSet?.has(`${hover.t.q},${hover.t.r}`) ? " · gidilebilir" : ""}${loot.some((l) => l.q === hover.t.q && l.r === hover.t.r) && !looted.has(`${hover.t.q},${hover.t.r}`) ? " · 📦 zula" : ""}` : "keşfedilmemiş"}
           </div>
         </div>
       ) : null}
@@ -540,6 +571,8 @@ export function Overworld({
   const caravans = useMemo(() => campaign.map_state?.caravans || [], [campaign.map_state]);
   const corruption = useMemo(() => new Set(campaign.map_state?.corruption || []), [campaign.map_state]);
   const control = useMemo(() => campaign.map_state?.control || {}, [campaign.map_state]);
+  const loot = useMemo(() => lootSites(map), [map]);
+  const looted = useMemo(() => new Set(campaign.map_state?.looted || []), [campaign.map_state]);
   const myChar = characters.find((c) => c.handle === me);
   const isMyTurn = campaign.status === "active" && campaign.current_turn === me && !!myChar?.alive && !campaign.encounter?.active;
   const reachSet = useMemo(() => {
@@ -579,7 +612,7 @@ export function Overworld({
         </span>
       </div>
       <div className="rounded-[10px] overflow-hidden" style={{ height: 190, background: "#070c12", border: "1px solid var(--frp-line)" }}>
-        <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive={false} onOpenFull={() => setFull(true)} />
+        <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} loot={loot} looted={looted} interactive={false} onOpenFull={() => setFull(true)} />
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px]" style={{ color: "var(--frp-muted)" }}>
         <span>{THEME_TR[map.theme] || map.theme} · tohum {map.seed}</span>
@@ -605,7 +638,7 @@ export function Overworld({
           </div>
           <div className="flex-1 px-4 pb-3">
             <div className="h-full w-full rounded-[12px] overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
-              <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive onHexClick={click} />
+              <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} loot={loot} looted={looted} interactive onHexClick={click} />
             </div>
           </div>
           <div className="px-4 pb-3 text-center text-[11px]" style={{ color: "#7f95a8" }}>

@@ -124,6 +124,7 @@ export interface Campaign {
     caravans?: { q: number; r: number; to: string }[];
     corruption?: string[];
     control?: Record<string, string>;
+    looted?: string[];
     seeded?: boolean;
   };
   created_at: string;

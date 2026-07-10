@@ -18,6 +18,7 @@ import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR, geographyQuests } from "@/lib/frp/movement";
 import { stackInventory, removeFromInventory, addToInventory, weaponDie, itemNameTr, coinBreakdown, UNARMED } from "@/lib/frp/items";
+import { lootSiteAt, rollLoot } from "@/lib/frp/loot";
 import { arenaReachable, battleMoveBudget, stepEnemies, isHighGround } from "@/lib/frp/battle";
 import { abilityById, hasLoS, aoeHexes, inRange, rollDamage, enemyAttackPower, hasShield, isStunned, tickEnemyStatus } from "@/lib/frp/abilities";
 import { axialDistance, parseKey } from "@/lib/frp/hex";
@@ -210,6 +211,22 @@ export async function POST(
     for (const q of justDone) await appendTurn(campaignId, "system", "system", `Görev tamamlandı: ${q.title}.`, null, campaign.round);
 
     const clock = advanceClock(campaign.map_state || { time: 6, weather: "clear", discovered_pois: [] }, cost, campaignId);
+
+    const looted = new Set(campaign.map_state?.looted || []);
+    const site = !looted.has(dest) ? lootSiteAt(map, dest) : null;
+    if (site) {
+      const haul = rollLoot(campaign.map_seed, site.q, site.r, site.tier);
+      for (const it of haul.items) ch.inventory = addToInventory(ch.inventory, it);
+      ch.gold = (ch.gold || 0) + haul.gold;
+      await saveCharacter(ch);
+      looted.add(dest);
+      const b = coinBreakdown(haul.gold);
+      const coins = [b.gold && `${b.gold} altın`, b.silver && `${b.silver} gümüş`, b.copper && `${b.copper} bakır`].filter(Boolean).join(" ") || `${haul.gold} bakır`;
+      const names = haul.items.map((it) => itemNameTr(it));
+      await appendTurn(campaignId, "system", "system", `${ch.name} bir zula buldu: ${[...names, coins].filter(Boolean).join(", ")}.`, null, campaign.round);
+    }
+    clock.looted = [...looted];
+
     const destTile = map.tiles.find((t) => `${t.q},${t.r}` === dest)!;
     const night = isNight(clock.time);
     const revealed = new Set([
@@ -251,7 +268,7 @@ export async function POST(
       next = living[ni];
       if (ni === 0) round += 1;
     }
-    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState, quests: [...quests, ...worldQuestsFrom(sim.events, quests)] }));
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: { ...sim.mapState, looted: clock.looted }, quests: [...quests, ...worldQuestsFrom(sim.events, quests)] }));
     if (next && next !== handle) {
       try {
         await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });
