@@ -8,8 +8,9 @@ import { ThinkingDice } from "@/components/frp/dice";
 import { FireOverlay } from "@/components/frp/fire-overlay";
 import { WorldHud } from "@/components/frp/world-hud";
 import { BattleMap } from "@/components/frp/battle-map";
+import { PartyMeet } from "@/components/frp/party-meet";
 import { ShopPanel } from "@/components/frp/shop-panel";
-import { itemNameTr } from "@/lib/frp/items";
+import { itemNameTr, stackInventory, isWeapon, UNARMED } from "@/lib/frp/items";
 import type { Campaign, Character, Turn, WorldState, WorldEvent } from "@/lib/frp/types";
 import {
   SendHorizontal,
@@ -19,6 +20,8 @@ import {
   Square,
   RotateCcw,
   Swords,
+  Sword,
+  Hand,
 } from "lucide-react";
 
 export function GameView({
@@ -49,6 +52,7 @@ export function GameView({
   const [events, setEvents] = useState(initialEvents);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"action" | "talk">("talk");
+  const [weapon, setWeapon] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [fireTrigger, setFireTrigger] = useState(0);
@@ -124,8 +128,9 @@ export function GameView({
       await fetch(`/api/frp/${id}/act`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: t, mode }),
+        body: JSON.stringify({ text: t, mode, weapon: campaign.encounter?.active && mode === "action" ? weapon : undefined }),
       });
+      setWeapon(null);
       await poll();
     } catch {
       /* ignore */
@@ -355,31 +360,56 @@ export function GameView({
             {myChar?.alive && !campaign.encounter?.active ? (
               <ShopPanel id={id} position={myChar.location} mapSeed={campaign.map_seed} doom={world.doom} myChar={myChar} onDone={poll} />
             ) : null}
+            {myChar?.alive && !campaign.encounter?.active ? (
+              <div className="mt-3">
+                <PartyMeet id={id} myChar={myChar} allies={characters.filter((c) => c.handle !== me && c.alive && c.location === myChar.location)} onDone={poll} />
+              </div>
+            ) : null}
             {campaign.encounter?.active && isMyTurn && myChar?.alive ? (
-              <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
-                <span className="text-[10px] font-bold tracking-wide" style={{ color: "var(--frp-danger)" }}>SAVAŞ</span>
-                {[
-                  { l: "Saldır", t: myChar.wielded ? `${itemNameTr(myChar.wielded)} ile saldırıyorum` : "Saldırıyorum" },
-                  { l: "Savun", t: "Kendimi savunuyorum" },
-                  { l: "Kaç", t: "Kaçmaya çalışıyorum" },
-                ].map((v) => (
-                  <button key={v.l} type="button" onClick={() => { setMode("action"); setText(v.t); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-ink-soft)", border: "1px solid var(--frp-line)" }}>
-                    {v.l}
+              <div className="mb-2 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <span className="text-[10.5px] font-semibold" style={{ color: "var(--frp-danger)" }}>Savaş</span>
+                  <span className="text-[10px]" style={{ color: "var(--frp-muted)" }}>saldırmak için silah seç</span>
+                </div>
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  {(() => {
+                    const inv = stackInventory(myChar.inventory || []).map((it) => it.id).filter(isWeapon);
+                    const ids = [...new Set([...(myChar.wielded ? [myChar.wielded] : []), ...inv])];
+                    const opts = [...ids.map((id) => ({ id, name: itemNameTr(id) })), { id: UNARMED.id, name: UNARMED.tr }];
+                    return opts.map((o) => (
+                      <button key={o.id} type="button" onClick={() => setWeapon(o.id)} className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-medium transition-colors" style={{ background: weapon === o.id ? "var(--frp-accent)" : "var(--frp-surface)", color: weapon === o.id ? "#fff" : "var(--frp-ink-soft)", border: `1px solid ${weapon === o.id ? "var(--frp-accent)" : "var(--frp-line)"}` }}>
+                        {o.id === UNARMED.id ? <Hand className="size-[12px]" strokeWidth={2} /> : <Sword className="size-[12px]" strokeWidth={2} />}
+                        {o.name}
+                      </button>
+                    ));
+                  })()}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button type="button" disabled={!weapon} onClick={() => { setMode("action"); setText(weapon === UNARMED.id ? "Yumruk ve tekmeyle saldırıyorum" : `${itemNameTr(weapon!)} ile saldırıyorum`); }} className="rounded-[8px] px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40" style={{ background: "var(--frp-danger)", color: "#fff", border: "1px solid var(--frp-danger)" }}>
+                    Saldır
                   </button>
-                ))}
-                {(myChar.abilities || []).slice(0, 3).map((a) => {
-                  const name = a.split(":")[0];
-                  return (
-                    <button key={a} type="button" onClick={() => { setMode("action"); setText(`${name} yeteneğimi kullanıyorum`); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)", border: "1px solid var(--frp-line)" }}>
-                      {name}
+                  {[
+                    { l: "Savun", t: "Kendimi savunuyorum" },
+                    { l: "Kaç", t: "Kaçmaya çalışıyorum" },
+                  ].map((v) => (
+                    <button key={v.l} type="button" onClick={() => { setMode("action"); setText(v.t); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-ink-soft)", border: "1px solid var(--frp-line)" }}>
+                      {v.l}
                     </button>
-                  );
-                })}
-                {campaign.encounter.enemies.filter((e) => e.hp > 0).map((e, i) => (
-                  <button key={i} type="button" onClick={() => setText((t) => (t ? `${t}: ${e.name}` : `${e.name} hedefime saldırıyorum`))} className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-muted)", border: "1px solid var(--frp-line)" }}>
-                    🎯 {e.name}
-                  </button>
-                ))}
+                  ))}
+                  {(myChar.abilities || []).slice(0, 3).map((a) => {
+                    const name = a.split(":")[0];
+                    return (
+                      <button key={a} type="button" onClick={() => { setMode("action"); setText(`${name} yeteneğimi kullanıyorum`); }} className="rounded-[8px] px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)", border: "1px solid var(--frp-line)" }}>
+                        {name}
+                      </button>
+                    );
+                  })}
+                  {campaign.encounter.enemies.filter((e) => e.hp > 0).map((e, i) => (
+                    <button key={i} type="button" onClick={() => setText((t) => (t ? `${t}: ${e.name}` : `${e.name} hedefime saldırıyorum`))} className="rounded-full px-2 py-1 text-[10px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-muted)", border: "1px solid var(--frp-line)" }}>
+                      🎯 {e.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
             <div className="mb-2 flex gap-1.5">

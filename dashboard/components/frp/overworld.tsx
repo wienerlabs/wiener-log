@@ -7,7 +7,8 @@ import { reachable, moveBudget, isNight, weatherLabel, timeLabel, biomeLabel } f
 import { effectiveHouse } from "@/lib/frp/worldsim";
 import type { Army, Caravan } from "@/lib/frp/worldsim";
 import type { Campaign, Character } from "@/lib/frp/types";
-import { Maximize2, X, CloudSun, Moon, Tent } from "lucide-react";
+import { Maximize2, X, CloudSun, Moon, Tent, Plus, Minus, Crosshair } from "lucide-react";
+import { drawPortraitToken } from "@/components/frp/portrait-token";
 
 const SQRT3 = Math.sqrt(3);
 
@@ -77,6 +78,7 @@ function hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: nu
 function Canvas({
   map,
   characters,
+  me,
   discovered,
   discoveredPois,
   reachSet,
@@ -90,6 +92,7 @@ function Canvas({
 }: {
   map: MapData;
   characters: Character[];
+  me: string;
   discovered: Set<string>;
   discoveredPois: Set<string>;
   reachSet: Map<string, number> | null;
@@ -296,21 +299,21 @@ function Canvas({
         const idx = seenCount.get(kk) || 0;
         seenCount.set(kk, idx + 1);
         const { x, y } = tileCenter(tl, size, ox, oy);
-        const rad = Math.max(4, size * 0.5);
-        const px = x + (idx % 3) * rad * 0.85 - rad * 0.85;
-        const py = y - Math.floor(idx / 3) * rad * 0.85;
-        ctx.beginPath();
-        ctx.arc(px, py, rad, 0, Math.PI * 2);
-        ctx.fillStyle = "#f5eedd";
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#2f81f7";
-        ctx.stroke();
-        ctx.fillStyle = "#1b2430";
-        ctx.font = `bold ${Math.round(rad * 1.1)}px ui-sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText((c.name || "?")[0].toUpperCase(), px, py + 0.5);
+        const rad = Math.max(6, size * 0.62);
+        const px = x + (idx % 3) * rad * 0.8 - rad * 0.8;
+        const py = y - Math.floor(idx / 3) * rad * 0.8;
+        drawPortraitToken(ctx, c.portrait_seed || c.handle, c.race, px, py, rad * 2, c.handle === me ? "#e0b64d" : "#2f81f7");
+        if (rad > 9) {
+          const label = c.name || c.handle;
+          ctx.font = `600 ${Math.round(rad * 0.62)}px ui-sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          const tw = ctx.measureText(label).width;
+          ctx.fillStyle = "rgba(10,16,22,0.72)";
+          ctx.fillRect(px - tw / 2 - 3, py + rad + 2, tw + 6, rad * 0.78);
+          ctx.fillStyle = c.handle === me ? "#e6c56a" : "#dbe6f0";
+          ctx.fillText(label, px, py + rad + 3);
+        }
       }
     };
     render();
@@ -320,7 +323,7 @@ function Canvas({
     });
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [map, characters, discovered, discoveredPois, reachSet, armies, caravans, corruption, control, hover, interactive, poiByRC, tick]);
+  }, [map, characters, me, discovered, discoveredPois, reachSet, armies, caravans, corruption, control, hover, interactive, poiByRC, tick]);
 
   const pick = (clientX: number, clientY: number): { t: Tile; poi: Poi | null } | null => {
     const canvas = canvasRef.current;
@@ -341,6 +344,34 @@ function Canvas({
     }
     if (!best || bd > size * size * 1.3) return null;
     return { t: best, poi: poiByRC.get(best.row * map.cols + best.col) || null };
+  };
+
+  const zoomBy = (f: number) => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const mx = wrap.clientWidth / 2, my = wrap.clientHeight / 2;
+    const s0 = view.current.scale, s1 = Math.max(0.6, Math.min(8, s0 * f)), k = s1 / s0;
+    view.current.ox = mx - (mx - view.current.ox) * k;
+    view.current.oy = my - (my - view.current.oy) * k;
+    view.current.scale = s1;
+    terrainRef.current = null;
+    setTick((n) => n + 1);
+  };
+  const recenter = () => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const mine = characters.find((c) => c.handle === me && c.alive) || characters.find((c) => c.alive);
+    if (!mine) return;
+    const [q, r] = (mine.location || "").split(",").map(Number);
+    const tl = map.tiles.find((t) => t.q === q && t.r === r);
+    if (!tl) return;
+    view.current.scale = Math.max(view.current.scale, 2.6);
+    const size = (wrap.clientWidth / (SQRT3 * (map.cols + 0.5))) * view.current.scale;
+    const { x, y } = tileCenter(tl, size, 0, 0);
+    view.current.ox = wrap.clientWidth / 2 - x;
+    view.current.oy = wrap.clientHeight / 2 - y;
+    terrainRef.current = null;
+    setTick((n) => n + 1);
   };
 
   return (
@@ -467,6 +498,19 @@ function Canvas({
           </div>
         </div>
       ) : null}
+      {interactive ? (
+        <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1.5">
+          <button type="button" aria-label="Yakınlaştır" onClick={() => zoomBy(1.35)} className="flex size-9 items-center justify-center rounded-[9px] text-white" style={{ background: "rgba(18,26,36,0.9)", border: "1px solid rgba(255,255,255,0.16)" }}>
+            <Plus className="size-[18px]" strokeWidth={2.4} />
+          </button>
+          <button type="button" aria-label="Uzaklaştır" onClick={() => zoomBy(1 / 1.35)} className="flex size-9 items-center justify-center rounded-[9px] text-white" style={{ background: "rgba(18,26,36,0.9)", border: "1px solid rgba(255,255,255,0.16)" }}>
+            <Minus className="size-[18px]" strokeWidth={2.4} />
+          </button>
+          <button type="button" aria-label="Karakterime odaklan" onClick={recenter} className="flex size-9 items-center justify-center rounded-[9px]" style={{ background: "rgba(224,182,77,0.9)", border: "1px solid rgba(255,255,255,0.2)", color: "#1b2430" }}>
+            <Crosshair className="size-[18px]" strokeWidth={2.4} />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -535,7 +579,7 @@ export function Overworld({
         </span>
       </div>
       <div className="rounded-[10px] overflow-hidden" style={{ height: 190, background: "#070c12", border: "1px solid var(--frp-line)" }}>
-        <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive={false} onOpenFull={() => setFull(true)} />
+        <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive={false} onOpenFull={() => setFull(true)} />
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px]" style={{ color: "var(--frp-muted)" }}>
         <span>{THEME_TR[map.theme] || map.theme} · tohum {map.seed}</span>
@@ -561,7 +605,7 @@ export function Overworld({
           </div>
           <div className="flex-1 px-4 pb-3">
             <div className="h-full w-full rounded-[12px] overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
-              <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive onHexClick={click} />
+              <Canvas map={map} characters={characters} me={me} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive onHexClick={click} />
             </div>
           </div>
           <div className="px-4 pb-3 text-center text-[11px]" style={{ color: "#7f95a8" }}>

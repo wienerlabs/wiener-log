@@ -17,7 +17,7 @@ import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR, geographyQuests } from "@/lib/frp/movement";
-import { stackInventory, removeFromInventory } from "@/lib/frp/items";
+import { stackInventory, removeFromInventory, addToInventory, weaponDie, itemNameTr, coinBreakdown, UNARMED } from "@/lib/frp/items";
 import { arenaReachable, battleMoveBudget, stepEnemies, isHighGround } from "@/lib/frp/battle";
 import { abilityById, hasLoS, aoeHexes, inRange, rollDamage, enemyAttackPower, hasShield, isStunned, tickEnemyStatus } from "@/lib/frp/abilities";
 import { axialDistance, parseKey } from "@/lib/frp/hex";
@@ -73,6 +73,8 @@ export async function POST(
     camp?: boolean;
     battleMove?: string;
     battleAbility?: { ability?: string; target?: string };
+    weapon?: string;
+    give?: { to?: string; gold?: number; item?: string };
   };
 
   if (body.control) {
@@ -324,6 +326,47 @@ export async function POST(
     return Response.json({ ok: true });
   }
 
+  if (body.give) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    const to = String(body.give.to || "");
+    if (!to) return Response.json({ error: "kime verileceği belirsiz" }, { status: 400 });
+    const from = await getCharacter(campaignId, handle);
+    if (!from || !from.alive) return Response.json({ error: "no living character" }, { status: 400 });
+    if (to === handle) return Response.json({ error: "kendine veremezsin" }, { status: 400 });
+    const dest = (await getCharacters(campaignId)).find((c) => c.handle === to);
+    if (!dest || !dest.alive) return Response.json({ error: "öyle bir yoldaş yok" }, { status: 400 });
+    if (from.location !== dest.location) return Response.json({ error: "aynı yerde değilsiniz" }, { status: 400 });
+    const coinStr = (c: number) => {
+      const b = coinBreakdown(c), p: string[] = [];
+      if (b.gold) p.push(`${b.gold} altın`);
+      if (b.silver) p.push(`${b.silver} gümüş`);
+      if (b.copper || !p.length) p.push(`${b.copper} bakır`);
+      return p.join(" ");
+    };
+    if (body.give.gold) {
+      const amt = Math.max(1, Math.floor(body.give.gold));
+      if ((from.gold || 0) < amt) return Response.json({ error: "altının yetmiyor" }, { status: 400 });
+      from.gold -= amt;
+      dest.gold = (dest.gold || 0) + amt;
+      await saveCharacter(from);
+      await saveCharacter(dest);
+      await appendTurn(campaignId, "system", "system", `${from.name}, ${dest.name} için ${coinStr(amt)} bıraktı.`, null, campaign.round);
+    } else if (body.give.item) {
+      const item = String(body.give.item);
+      const owned = stackInventory(from.inventory || []).find((it) => it.id === item);
+      if (!owned || (owned.qty ?? 0) <= 0) return Response.json({ error: "elinde yok" }, { status: 400 });
+      from.inventory = removeFromInventory(from.inventory, item, 1);
+      dest.inventory = addToInventory(dest.inventory, item);
+      await saveCharacter(from);
+      await saveCharacter(dest);
+      await appendTurn(campaignId, "system", "system", `${from.name}, ${dest.name} kişisine ${itemNameTr(item)} verdi.`, null, campaign.round);
+    } else {
+      return Response.json({ error: "ne verileceği belirsiz" }, { status: 400 });
+    }
+    return Response.json({ ok: true });
+  }
+
   if (body.battleMove) {
     if (campaign.status !== "active")
       return Response.json({ error: "campaign not active" }, { status: 400 });
@@ -521,6 +564,13 @@ export async function POST(
   }
 
   await appendTurn(campaignId, handle, "action", text, null, campaign.round);
-  const r = await resolveTurn(campaignId, handle, text);
+  let opts: Parameters<typeof resolveTurn>[3] = undefined;
+  if (campaign.encounter?.active && body.weapon) {
+    const unarmed = body.weapon === UNARMED.id;
+    const die = weaponDie(unarmed ? null : body.weapon);
+    const roll = 1 + ((Math.imul((campaignId * 2654435761 + campaign.round * 40503 + handle.length * 17 + text.length * 7) | 0, 2246822507) >>> 0) % die);
+    opts = { weaponAttack: { name: unarmed ? UNARMED.tr : itemNameTr(body.weapon), die, roll, unarmed } };
+  }
+  const r = await resolveTurn(campaignId, handle, text, opts);
   return Response.json({ ok: r.ok, narration: r.narration, error: r.error });
 }

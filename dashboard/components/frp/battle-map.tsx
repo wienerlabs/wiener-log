@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { axialToPixel, offsetToAxial, key as hexKey, axialRange, parseKey } from "@/lib/frp/hex";
 import { arenaReachable, battleMoveBudget, TERRAIN_TR } from "@/lib/frp/battle";
+import { drawPortraitToken } from "@/components/frp/portrait-token";
 import { abilitiesFor, hasLoS, aoeHexes, inRange } from "@/lib/frp/abilities";
 import type { Ability } from "@/lib/frp/abilities";
 import type { Campaign, Character, BattleArena, ArenaTerrain, StatusEffect } from "@/lib/frp/types";
@@ -162,7 +163,7 @@ function BattleCanvas({
         });
       };
 
-      const token = (c: Cell, fill: string, ring: string, label: string, hp: number, hpMax: number, dead: boolean, status: StatusEffect[] | undefined, warn: boolean, meRing: boolean) => {
+      const token = (c: Cell, fill: string, ring: string, label: string, hp: number, hpMax: number, dead: boolean, status: StatusEffect[] | undefined, warn: boolean, meRing: boolean, portrait?: { seed: string; race: string | null }) => {
         const r = size * 0.6;
         if (meRing && !dead) {
           ctx.beginPath();
@@ -171,19 +172,23 @@ function BattleCanvas({
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        ctx.globalAlpha = dead ? 0.4 : 1;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y - size * 0.08, r, 0, Math.PI * 2);
-        ctx.fillStyle = fill;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = ring;
-        ctx.stroke();
-        ctx.fillStyle = "#f2f6fa";
-        ctx.font = `700 ${Math.round(size * 0.62)}px ui-sans-serif, system-ui`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(label, c.x, c.y - size * 0.06);
+        if (portrait) {
+          drawPortraitToken(ctx, portrait.seed, portrait.race, c.x, c.y - size * 0.08, r * 2, ring, dead);
+        } else {
+          ctx.globalAlpha = dead ? 0.4 : 1;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y - size * 0.08, r, 0, Math.PI * 2);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = ring;
+          ctx.stroke();
+          ctx.fillStyle = "#f2f6fa";
+          ctx.font = `700 ${Math.round(size * 0.62)}px ui-sans-serif, system-ui`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, c.x, c.y - size * 0.06);
+        }
         const bw = size * 1.1, bx = c.x - bw / 2, by = c.y + size * 0.58;
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(bx, by, bw, size * 0.2);
@@ -217,7 +222,7 @@ function BattleCanvas({
         if (!c) continue;
         const ch2 = P.characters.find((x) => x.handle === handle);
         const dead = ch2 ? !ch2.alive : false;
-        token(c, "#123240", k === P.meKey ? "#e0b64d" : "#3f8fb0", (ch2?.name || handle).slice(0, 1).toUpperCase(), ch2?.hp_cur ?? 1, ch2?.hp_max ?? 1, dead, ch2?.status_effects, false, k === P.meKey);
+        token(c, "#123240", k === P.meKey ? "#e0b64d" : "#3f8fb0", (ch2?.name || handle).slice(0, 1).toUpperCase(), ch2?.hp_cur ?? 1, ch2?.hp_max ?? 1, dead, ch2?.status_effects, false, k === P.meKey, ch2 ? { seed: ch2.portrait_seed || ch2.handle, race: ch2.race } : undefined);
       }
 
       const live: Floater[] = [];

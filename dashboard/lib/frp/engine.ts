@@ -452,7 +452,7 @@ export async function resolveTurn(
   campaignId: number,
   actorHandle: string,
   action: string,
-  opts: { isOpening?: boolean; travelTo?: string } = {},
+  opts: { isOpening?: boolean; travelTo?: string; weaponAttack?: { name: string; die: number; roll: number; unarmed?: boolean } } = {},
 ): Promise<TurnResult> {
   const campaign = await getCampaign(campaignId);
   if (!campaign) return { ok: false, error: "campaign not found" };
@@ -516,6 +516,11 @@ export async function resolveTurn(
   let battleCtx: string | undefined;
   if (!opts.isOpening && campaign.encounter?.active && campaign.encounter.arena && actor?.alive) {
     battleCtx = battleContext(campaign.encounter.arena, actorHandle, campaign.encounter.enemies) || undefined;
+  }
+  if (opts.weaponAttack && campaign.encounter?.active) {
+    const wa = opts.weaponAttack;
+    const line = `WEAPON STRIKE: @${actorHandle} attacks with ${wa.name} this turn (damage die d${wa.die}, rolled ${wa.roll}).${wa.unarmed ? " Unarmed and weak: only lands if they are adjacent, and deals little." : ""} Apply about ${wa.roll} damage to the single enemy they target (reduce for armor or resistance, raise a little on a vivid killing blow). If the strike cannot land, narrate why instead of dealing damage.`;
+    battleCtx = battleCtx ? `${battleCtx} ${line}` : line;
   }
 
   const pool = rollPool();

@@ -105,7 +105,7 @@ const HEAD_BOUNDS: [number, [number, number]][] = [
   [13, [8, 11]],
 ];
 
-function buildPortrait(
+export function buildPortrait(
   seed: string,
   race?: string,
   sin?: Sin,

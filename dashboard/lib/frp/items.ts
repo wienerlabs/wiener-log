@@ -383,6 +383,30 @@ export function isConsumable(id: string): boolean {
   return id in USE_EFFECTS;
 }
 
+export function isWeapon(id: string): boolean {
+  return itemById(id)?.category === "weapon";
+}
+
+const WEAPON_DIE: Record<string, number> = {
+  dagger: 4,
+  rapier: 6,
+  sword: 6,
+  bow: 6,
+  spear: 7,
+  crossbow: 8,
+  mace: 8,
+  staff: 6,
+  warhammer: 10,
+  greatsword: 10,
+};
+
+export const UNARMED = { id: "unarmed", die: 3, tr: "Yumruk ve tekme" };
+
+export function weaponDie(id: string | null | undefined): number {
+  if (!id || id === UNARMED.id) return UNARMED.die;
+  return WEAPON_DIE[id] ?? (itemById(id)?.sin ? 12 : itemById(id)?.rarity === "legendary" ? 12 : itemById(id)?.rarity === "rare" ? 10 : 8);
+}
+
 export interface ForgeUpgrade {
   from: string;
   to: string;
