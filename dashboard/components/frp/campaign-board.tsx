@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Swords, Check, Skull, Crown, Dot } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users, Swords, Check, Skull, Crown, Dot, Trash2 } from "lucide-react";
 import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
 import { MapThumb } from "@/components/frp/map-thumb";
 import { houseById } from "@/lib/frp/houses";
@@ -27,12 +28,34 @@ function leadingHouse(factions: Record<string, number> | null): string | null {
 }
 
 function CampaignCard({ c, me }: { c: CampaignListRow; me: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
   const st = STATUS[c.status] || STATUS.lobby;
   const party = c.party || [];
   const lead = leadingHouse(c.factions);
   const leadHouse = lead ? houseById(lead) : null;
   const turnName = c.current_turn ? party.find((p) => p.handle === c.current_turn)?.name || `@${c.current_turn}` : null;
   const doom = c.doom || 0;
+  const canDelete = c.status === "lobby" && (c.host === me || me === "admin");
+
+  const del = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy) return;
+    if (!confirm(`"${c.title}" efsanesini silmek istediğine emin misin? Bu geri alınamaz.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/frp/${c.id}`, { method: "DELETE" });
+      if (r.ok) router.refresh();
+      else {
+        const d = await r.json().catch(() => ({}));
+        alert(d.error || "silinemedi");
+        setBusy(false);
+      }
+    } catch {
+      setBusy(false);
+    }
+  };
 
   return (
     <Link href={`/tavern/${c.id}`} className="group block">
@@ -64,6 +87,19 @@ function CampaignCard({ c, me }: { c: CampaignListRow; me: string }) {
             <div className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur-sm" style={{ color: "#e8a0a0", background: "rgba(40,12,16,0.6)", border: "1px solid rgba(200,80,80,0.35)" }}>
               <Skull className="size-[11px]" strokeWidth={2} /> {doom}
             </div>
+          ) : null}
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={del}
+              disabled={busy}
+              aria-label="Efsaneyi sil"
+              title="Bu boş efsaneyi sil"
+              className="absolute right-2.5 top-2.5 inline-flex size-7 items-center justify-center rounded-full backdrop-blur-sm transition-colors disabled:opacity-50"
+              style={{ color: "#e8a0a0", background: "rgba(40,12,16,0.65)", border: "1px solid rgba(200,80,80,0.4)" }}
+            >
+              <Trash2 className="size-[13px]" strokeWidth={2} />
+            </button>
           ) : null}
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
             <h3 className="truncate text-[16px] font-semibold tracking-[-0.01em] text-white drop-shadow">{c.title}</h3>

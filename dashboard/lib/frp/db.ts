@@ -234,6 +234,13 @@ export async function restartCampaign(campaignId: number): Promise<void> {
   `;
 }
 
+export async function deleteCampaign(campaignId: number): Promise<void> {
+  await sql`DELETE FROM campaign_turns WHERE campaign_id = ${campaignId}`;
+  await sql`DELETE FROM frp_world_events WHERE campaign_id = ${campaignId}`;
+  await sql`DELETE FROM characters WHERE campaign_id = ${campaignId}`;
+  await sql`DELETE FROM campaigns WHERE id = ${campaignId}`;
+}
+
 export async function appendTurn(
   campaignId: number,
   actor: string,

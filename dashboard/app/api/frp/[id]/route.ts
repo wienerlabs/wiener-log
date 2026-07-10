@@ -1,9 +1,33 @@
 import { getSession } from "@/lib/session";
-import { getCampaign, getCharacters, getTurns, updateCampaign, saveCharacter } from "@/lib/frp/db";
+import { getCampaign, getCharacters, getTurns, updateCampaign, saveCharacter, deleteCampaign } from "@/lib/frp/db";
 import { listWorldEvents } from "@/lib/frp/world";
 import { needsOverworldHeal, healOverworldState } from "@/lib/frp/heal";
 
 export const dynamic = "force-dynamic";
+
+function me(s: { handle: string; username: string }): string {
+  return s.handle && s.handle !== "admin" ? s.handle : s.username;
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session) return new Response("Unauthorized", { status: 401 });
+  const { id } = await params;
+  const campaignId = Number(id);
+  if (!Number.isFinite(campaignId)) return new Response("bad id", { status: 400 });
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) return Response.json({ error: "yok" }, { status: 404 });
+  const isHost = campaign.host === me(session);
+  if (!isHost && session.role !== "admin")
+    return Response.json({ error: "yalnızca kurucu silebilir" }, { status: 403 });
+  if (campaign.status !== "lobby")
+    return Response.json({ error: "başlamış efsane silinemez" }, { status: 400 });
+  await deleteCampaign(campaignId);
+  return Response.json({ ok: true });
+}
 
 export async function GET(
   req: Request,

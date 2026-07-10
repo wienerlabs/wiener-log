@@ -80,7 +80,7 @@ function TurnBlock({
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/frp/loc/${loc.key}.png`} alt={loc.tr} className="block w-full" />
+            <img src={`/frp/loc/${loc.key}.webp`} alt={loc.tr} className="block w-full" />
             <figcaption className="px-2 py-1 text-[10px] font-medium" style={{ background: "var(--frp-surface)", color: "var(--frp-muted)" }}>
               {loc.tr}
             </figcaption>
