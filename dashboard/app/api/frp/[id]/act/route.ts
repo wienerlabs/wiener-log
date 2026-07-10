@@ -15,7 +15,7 @@ import { deleteWorldEvents } from "@/lib/frp/world";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
-import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel } from "@/lib/frp/movement";
+import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR } from "@/lib/frp/movement";
 import type { Campaign } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
@@ -207,10 +207,25 @@ export async function POST(
     for (const p of map.pois) if (p.hidden && hexDistanceKey(dest, `${p.q},${p.r}`) <= 1) dp.add(p.id);
     clock.discovered_pois = [...dp];
 
-    const poiHere = map.pois.find((p) => p.q === destTile.q && p.r === destTile.r);
-    const line = poiHere && !poiHere.hidden ? `${ch.name}, ${poiHere.name} yakınına vardı.` : `${ch.name}, ${biomeLabel(destTile.biome)} boyunca ilerledi.`;
-    await appendTurn(campaignId, "system", "system", line, null, campaign.round);
+    await updateCampaign(campaignId, fields(campaign, { discovered: [...revealed], map_state: clock }));
 
+    const poiHere = map.pois.find((p) => p.q === destTile.q && p.r === destTile.r);
+    const visiblePoi = poiHere && (!poiHere.hidden || dp.has(poiHere.id)) ? poiHere : null;
+    const notable = visiblePoi && ["dungeon", "boss", "sanctum", "capital", "sin_site", "wonder"].includes(visiblePoi.kind);
+    const roll = (Math.imul((campaignId * 2654435761 + Math.floor(clock.time) * 40503 + dest.split(",").reduce((s, x) => s + Number(x), 0)) | 0, 2246822507) >>> 0) / 4294967296;
+    const chance = destTile.danger / 160 + (night ? 0.05 : 0) + (clock.weather === "storm" || clock.weather === "fog" ? 0.05 : 0) + (campaign.doom || 0) / 600;
+    const encounter = roll < chance;
+
+    if (encounter || notable) {
+      const framing = encounter
+        ? `Takım ${biomeLabel(destTile.biome)} arazisine${visiblePoi ? ` (${visiblePoi.name} yakını)` : ""} varır varmaz aniden bir tehlikeyle karşılaşıyor; bir düşman ya da pusu belirir ve savaş başlıyor.`
+        : `Takım ${visiblePoi!.name} mekanına (${POI_KIND_TR[visiblePoi!.kind]}) ulaştı. Burayı, atmosferini ve buradaki tehlike ya da fırsatı kısaca anlat.`;
+      const r = await resolveTurn(campaignId, handle, framing, {});
+      return Response.json({ ok: r.ok });
+    }
+
+    const line = visiblePoi ? `${ch.name}, ${visiblePoi.name} yakınına vardı.` : `${ch.name}, ${biomeLabel(destTile.biome)} boyunca ilerledi.`;
+    await appendTurn(campaignId, "system", "system", line, null, campaign.round);
     const chars = await getCharacters(campaignId);
     const living = campaign.turn_order.filter((h) => chars.find((c) => c.handle === h && c.alive));
     let round = campaign.round;

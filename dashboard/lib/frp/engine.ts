@@ -16,6 +16,8 @@ import { addWorldEvent, listWorldEvents, driftFactions } from "@/lib/frp/world";
 import { sceneEvent } from "@/lib/frp/scenes";
 import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
+import { generateMap } from "@/lib/frp/mapgen";
+import { biomeLabel, timeLabel, weatherLabel, isNight, hexDistanceKey, hexDir, POI_KIND_TR } from "@/lib/frp/movement";
 import type {
   Character,
   Effect,
@@ -468,6 +470,36 @@ export async function resolveTurn(
     .filter((n): n is MapNode => !!n);
   const dest = opts.travelTo ? nodeByKey(opts.travelTo) : null;
 
+  let hexCtx:
+    | { biome: string; region: string | null; danger: number; time: string; weather: string; night: boolean; nearby: { name: string; kind: string; dir: string; dist: number }[] }
+    | undefined;
+  if (campaign.map_seed && actor?.location && /^-?\d+,-?\d+$/.test(actor.location)) {
+    const omap = generateMap(campaign.map_seed);
+    const [aq, ar] = actor.location.split(",").map(Number);
+    const tile = omap.tiles.find((t) => t.q === aq && t.r === ar);
+    if (tile) {
+      const disc = new Set(campaign.discovered || []);
+      const dpois = new Set(campaign.map_state?.discovered_pois || []);
+      const nearby = omap.pois
+        .filter((p) => (!p.hidden || dpois.has(p.id)) && disc.has(`${p.q},${p.r}`))
+        .map((p) => ({ p, d: hexDistanceKey(actor.location, `${p.q},${p.r}`) }))
+        .filter((x) => x.d > 0 && x.d <= 7)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 5)
+        .map((x) => ({ name: x.p.name, kind: POI_KIND_TR[x.p.kind] || x.p.kind, dir: hexDir(aq, ar, x.p.q, x.p.r), dist: x.d }));
+      const t0 = campaign.map_state?.time ?? 6;
+      hexCtx = {
+        biome: biomeLabel(tile.biome),
+        region: tile.region ? houseById(tile.region)?.name || tile.region : null,
+        danger: tile.danger,
+        time: timeLabel(t0),
+        weather: weatherLabel(campaign.map_state?.weather || "clear"),
+        night: isNight(t0),
+        nearby,
+      };
+    }
+  }
+
   if (!opts.isOpening) {
     const actorChar = characters.find((c) => c.handle === actorHandle);
     if (actorChar && actorChar.alive) {
@@ -492,7 +524,7 @@ export async function resolveTurn(
     action,
     pool,
     wild,
-    { world, worldFeed, node, neighbors, dest },
+    { world, worldFeed, node, neighbors, dest, hex: hexCtx },
   );
   const maxTokens = opts.isOpening ? 1600 : 1050;
   let gm = await callGM(model, userPrompt, maxTokens);

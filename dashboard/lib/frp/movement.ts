@@ -114,6 +114,29 @@ export function weatherLabel(w: string): string {
   return { clear: "açık", cloud: "bulutlu", fog: "sisli", rain: "yağmurlu", storm: "fırtınalı", snow: "karlı" }[w] || w;
 }
 
+const SQRT3M = Math.sqrt(3);
+
+export function hexDir(fq: number, fr: number, tq: number, tr: number): string {
+  const dx = SQRT3M * (tq - fq) + (SQRT3M / 2) * (tr - fr);
+  const dy = 1.5 * (tr - fr);
+  const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const dirs = ["doğu", "güneydoğu", "güney", "güneybatı", "batı", "kuzeybatı", "kuzey", "kuzeydoğu"];
+  return dirs[Math.round((((ang + 360) % 360) / 45)) % 8];
+}
+
+export const POI_KIND_TR: Record<string, string> = {
+  start: "başlangıç",
+  capital: "başkent",
+  market: "pazar",
+  forge: "demirhane",
+  dungeon: "zindan",
+  boss: "yuva",
+  sanctum: "tapınak",
+  wild: "yaban",
+  sin_site: "günah sitesi",
+  wonder: "harika",
+};
+
 export function biomeLabel(biome: string): string {
   return {
     deep_water: "derin su",

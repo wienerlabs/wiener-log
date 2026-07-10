@@ -176,6 +176,15 @@ export function buildUserPrompt(
     node?: MapNode;
     neighbors: MapNode[];
     dest?: MapNode | null;
+    hex?: {
+      biome: string;
+      region: string | null;
+      danger: number;
+      time: string;
+      weather: string;
+      night: boolean;
+      nearby: { name: string; kind: string; dir: string; dist: number }[];
+    };
   },
 ): string {
   const memory =
@@ -224,6 +233,12 @@ From here they can travel next to (put the key in acting.moved_to to actually mo
   const travelBlock = ctx.dest
     ? `\nTRAVEL THIS TURN: the party leaves ${here?.name || "here"} and journeys to ${ctx.dest.name} (${KIND_TR[ctx.dest.kind]}). Narrate the road and their arrival in a few short sentences; a wild encounter may occur on the way if it fits. End the scene at ${ctx.dest.name}.`
     : "";
+  const hexBlock = ctx.hex
+    ? `MAP (overworld, this party's own world): @${actorHandle} is on ${ctx.hex.biome} terrain${ctx.hex.region ? `, in the lands of House ${ctx.hex.region}` : ""} (danger ${ctx.hex.danger}/100). It is ${ctx.hex.time}, weather ${ctx.hex.weather}${ctx.hex.night ? ", night" : ""}.
+Known places nearby: ${ctx.hex.nearby.length ? ctx.hex.nearby.map((n) => `${n.name} (${n.kind}) to the ${n.dir}, ${n.dist} away`).join("; ") : "none in sight"}.
+The party crosses the map hex by hex on their own; you do NOT relocate them. Narrate what is here and now, fitting the terrain, weather, and time of day.`
+    : "";
+  const spatialBlock = ctx.hex ? hexBlock : mapBlock;
 
   return `CAMPAIGN: ${campaign.title}
 SETTING: ${campaign.setting}
@@ -242,7 +257,7 @@ HOUSE REPUTATION (this party): ${Object.entries(campaign.reputation || {}).map((
 
 ${worldBlock}
 
-${mapBlock}${travelBlock}
+${spatialBlock}${travelBlock}
 
 PARTY:
 ${party}
