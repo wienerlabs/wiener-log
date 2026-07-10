@@ -21,6 +21,7 @@ export function CreateCampaign() {
   const [tone, setTone] = useState("karanlık, roman havasında, gri ahlak");
   const [difficulty, setDifficulty] = useState("normal");
   const [model, setModel] = useState("claude-haiku-4-5");
+  const [seed, setSeed] = useState("");
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
@@ -30,7 +31,7 @@ export function CreateCampaign() {
       const res = await fetch("/api/frp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, setting, tone, difficulty, model }),
+        body: JSON.stringify({ title, setting, tone, difficulty, model, seed }),
       });
       const d = (await res.json()) as { id?: number };
       if (d.id) router.push(`/tavern/${d.id}`);
@@ -71,6 +72,13 @@ export function CreateCampaign() {
           value={tone}
           onChange={(e) => setTone(e.target.value)}
           placeholder="Ton"
+          className="rounded-[11px] px-3.5 py-2 text-[13px] outline-none"
+          style={field}
+        />
+        <input
+          value={seed}
+          onChange={(e) => setSeed(e.target.value)}
+          placeholder="Harita tohumu (opsiyonel) — aynı tohum aynı dünya"
           className="rounded-[11px] px-3.5 py-2 text-[13px] outline-none"
           style={field}
         />

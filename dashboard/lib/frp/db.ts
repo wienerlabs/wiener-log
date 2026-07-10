@@ -13,11 +13,12 @@ export async function createCampaign(input: {
   host: string;
   gm_model: string;
   difficulty: string;
+  map_seed: string;
 }): Promise<number> {
   const rows = (await sql`
-    INSERT INTO campaigns (title, setting, tone, host, gm_model, difficulty, status, turn_order, position, discovered)
+    INSERT INTO campaigns (title, setting, tone, host, gm_model, difficulty, status, turn_order, position, discovered, map_seed)
     VALUES (${input.title}, ${input.setting}, ${input.tone}, ${input.host},
-            ${input.gm_model}, ${input.difficulty}, 'lobby', '[]'::jsonb, ${START_NODE}, ${JSON.stringify([START_NODE])}::jsonb)
+            ${input.gm_model}, ${input.difficulty}, 'lobby', '[]'::jsonb, ${START_NODE}, ${JSON.stringify([START_NODE])}::jsonb, ${input.map_seed})
     RETURNING id
   `) as { id: number }[];
   return rows[0].id;
@@ -54,7 +55,7 @@ export async function getCampaign(id: number): Promise<Campaign | null> {
     SELECT id, title, setting, tone, status, host, gm_model, difficulty,
       current_scene, state_summary, turn_order, current_turn, round, encounter,
       doom, quests, reputation, current_location, position, discovered,
-      relics, factions, node_control,
+      relics, factions, node_control, map_seed,
       created_at, updated_at
     FROM campaigns WHERE id = ${id} LIMIT 1
   `) as Campaign[];

@@ -2,7 +2,8 @@ import { HOUSES, houseById } from "@/lib/frp/houses";
 import { factionControl } from "@/lib/frp/world";
 import { PixelSprite, SinSigil } from "@/components/frp/pixel";
 import { WorldMap } from "@/components/frp/world-map";
-import type { Campaign, WorldState, WorldEvent, Sin } from "@/lib/frp/types";
+import { Overworld } from "@/components/frp/overworld";
+import type { Campaign, Character, WorldState, WorldEvent, Sin } from "@/lib/frp/types";
 import { Skull, ScrollText, Check, X, Radio } from "lucide-react";
 
 const ALL_SINS: Sin[] = ["pride", "greed", "lust", "envy", "gluttony", "wrath", "sloth"];
@@ -19,6 +20,7 @@ export function WorldHud({
   campaign,
   world,
   events,
+  characters,
   myLocation,
   canTravel,
   onTravel,
@@ -27,6 +29,7 @@ export function WorldHud({
   campaign: Campaign;
   world: WorldState;
   events: WorldEvent[];
+  characters: Character[];
   myLocation: string | null;
   canTravel: boolean;
   onTravel: (key: string) => void;
@@ -86,14 +89,18 @@ export function WorldHud({
       ) : null}
 
       <div className="mt-3">
-        <WorldMap
-          position={myLocation ?? campaign.position}
-          discovered={campaign.discovered || []}
-          nodeControl={world.node_control || {}}
-          canTravel={canTravel}
-          onTravel={onTravel}
-          busy={busy}
-        />
+        {campaign.map_seed ? (
+          <Overworld seed={campaign.map_seed} characters={characters} />
+        ) : (
+          <WorldMap
+            position={myLocation ?? campaign.position}
+            discovered={campaign.discovered || []}
+            nodeControl={world.node_control || {}}
+            canTravel={canTravel}
+            onTravel={onTravel}
+            busy={busy}
+          />
+        )}
       </div>
 
       <div className="mt-3 border-t pt-2.5" style={{ borderColor: "var(--frp-line)" }}>

@@ -100,6 +100,7 @@ export interface Campaign {
   relics: Sin[];
   factions: Record<string, number>;
   node_control: Record<string, string>;
+  map_seed: string | null;
   created_at: string;
   updated_at: string;
 }

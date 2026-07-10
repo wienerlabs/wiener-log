@@ -401,6 +401,7 @@ export function GameView({
             campaign={campaign}
             world={world}
             events={events}
+            characters={characters}
             myLocation={myChar?.location ?? null}
             canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
             onTravel={travel}

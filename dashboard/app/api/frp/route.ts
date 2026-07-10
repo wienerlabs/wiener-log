@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     tone?: string;
     difficulty?: string;
     model?: string;
+    seed?: string;
   };
   const title = String(body.title || "").slice(0, 120).trim();
   const setting = String(body.setting || "").slice(0, 2000).trim();
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
   const gm_model = ["claude-haiku-4-5", "claude-sonnet-4-5"].includes(body.model || "")
     ? (body.model as string)
     : "claude-haiku-4-5";
+  const rawSeed = String(body.seed || "")
+    .trim()
+    .slice(0, 40)
+    .replace(/[^\p{L}\p{N} _-]/gu, "");
+  const map_seed = rawSeed || `w-${crypto.randomUUID().slice(0, 8)}`;
   const id = await createCampaign({
     title,
     setting,
@@ -40,6 +46,7 @@ export async function POST(req: Request) {
     difficulty: ["easy", "normal", "hard", "grim"].includes(body.difficulty || "")
       ? (body.difficulty as string)
       : "normal",
+    map_seed,
   });
   return Response.json({ id });
 }
