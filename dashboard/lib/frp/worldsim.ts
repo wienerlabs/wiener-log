@@ -1,4 +1,5 @@
 import type { MapData, Tile } from "@/lib/frp/mapgen";
+import type { Quest } from "@/lib/frp/types";
 
 export interface Army {
   house: string;
@@ -29,6 +30,8 @@ export interface SimEvent {
   kind: string;
   text: string;
   house: string | null;
+  at?: string;
+  place?: string;
 }
 
 const HEX = [
@@ -111,7 +114,7 @@ export function simTick(map: MapData, state: SimState, seed: number): { state: S
         const loser = tgt.house;
         if (loser && loser !== army.house && control[loser] !== army.house) {
           control[loser] = army.house;
-          events.push({ kind: "capture", text: `${houseOf(army.house)} orduları ${tgt.name} başkentini düşürdü; ${houseOf(loser)} toprakları el değiştirdi.`, house: army.house });
+          events.push({ kind: "capture", text: `${houseOf(army.house)} orduları ${tgt.name} başkentini düşürdü; ${houseOf(loser)} toprakları el değiştirdi.`, house: army.house, at: `${tgt.q},${tgt.r}`, place: tgt.name });
         }
         army.siege = 0;
         const caps = map.pois.filter((p) => p.kind === "capital" && p.id !== army.target && (control[p.house || ""] || p.house) !== army.house);
@@ -186,4 +189,27 @@ export function tickWorld(map: MapData, mapState: SimState, seed: number): { map
 export function effectiveHouse(control: Record<string, string> | undefined, house: string | null): string | null {
   if (!house) return null;
   return (control && control[house]) || house;
+}
+
+export function worldQuestsFrom(events: SimEvent[], existing: Quest[]): Quest[] {
+  const activeWq = (existing || []).filter((q) => q.id.startsWith("wq-") && q.status === "active").length;
+  const have = new Set((existing || []).map((q) => q.id));
+  const out: Quest[] = [];
+  let budget = Math.max(0, 4 - activeWq);
+  for (const ev of events) {
+    if (budget <= 0) break;
+    if (ev.kind === "capture" && ev.at && ev.place) {
+      const id = `wq-${ev.at}`;
+      if (have.has(id)) continue;
+      have.add(id);
+      out.push({ id, title: `${ev.place} düştü — kurtarmaya git`, status: "active", kind: "side", target: ev.at });
+      budget--;
+    }
+  }
+  return out;
+}
+
+export function armyNear(mapState: SimState, hexKey: string, radius: number): boolean {
+  const [q, r] = hexKey.split(",").map(Number);
+  return (mapState.armies || []).some((a) => (Math.abs(a.q - q) + Math.abs(a.q + a.r - q - r) + Math.abs(a.r - r)) / 2 <= radius);
 }

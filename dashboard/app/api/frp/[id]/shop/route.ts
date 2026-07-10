@@ -17,6 +17,8 @@ import {
 } from "@/lib/frp/items";
 import { WORLD_MAP, isMarket, isForge } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
+import { armyNear, effectiveHouse } from "@/lib/frp/worldsim";
+import { houseById } from "@/lib/frp/houses";
 
 export const dynamic = "force-dynamic";
 
@@ -53,13 +55,33 @@ export async function POST(
 
   let market = false;
   let forge = false;
-  if (campaign.map_seed) {
-    const omap = generateMap(campaign.map_seed);
+  let econMult = 1;
+  let econNote = "";
+  let refused = false;
+  const omap = campaign.map_seed ? generateMap(campaign.map_seed) : null;
+  if (omap) {
     const [q, r] = (ch.location || "").split(",").map(Number);
     const poi = omap.pois.find((p) => p.q === q && p.r === r);
     if (poi) {
       market = poi.kind === "market" || poi.kind === "capital";
       forge = poi.kind === "forge" || poi.kind === "capital";
+    }
+    const tile = omap.tiles.find((t) => t.q === q && t.r === r);
+    const house = effectiveHouse(campaign.map_state?.control, tile?.region ?? null);
+    const rep = house ? campaign.reputation?.[house] ?? 0 : 0;
+    if (ch.location && armyNear(campaign.map_state || {}, ch.location, 4)) {
+      econMult *= 1.3;
+      econNote = "savaş fiyatları";
+    }
+    if (rep <= -60) {
+      refused = true;
+      econNote = `${house ? houseById(house)?.name || house : "bu hanedan"} seni topraklarında istemiyor`;
+    } else if (rep < -20) {
+      econMult *= 1.3;
+      econNote = econNote || "hoş karşılanmıyorsun";
+    } else if (rep > 40) {
+      econMult *= 0.85;
+      econNote = econNote || "müttefik indirimi";
     }
   } else {
     const node = ch.location ? WORLD_MAP[ch.location] : undefined;
@@ -73,13 +95,15 @@ export async function POST(
 
   const body = (await req.json()) as { op?: string; item?: string; from?: string };
   const doom = campaign.doom;
+  const econ = (base: number) => Math.max(1, Math.round(base * econMult));
 
   if (body.op === "buy") {
+    if (refused) return Response.json({ error: econNote }, { status: 400 });
     const item = String(body.item || "");
     const allowed =
       (market && MARKET_STOCK.includes(item)) || (forge && FORGE_STOCK.includes(item));
     if (!allowed) return Response.json({ error: "burada satılmıyor" }, { status: 400 });
-    const cost = priceWithDoom(itemPrice(item), doom);
+    const cost = econ(priceWithDoom(itemPrice(item), doom));
     if (cost <= 0) return Response.json({ error: "satılık değil" }, { status: 400 });
     if ((ch.gold || 0) < cost)
       return Response.json({ error: "altının yetmiyor" }, { status: 400 });
@@ -110,7 +134,8 @@ export async function POST(
     if (!u) return Response.json({ error: "yükseltme yok" }, { status: 400 });
     const owned = stackInventory(ch.inventory).find((it) => it.id === from);
     if (!owned || (owned.qty ?? 0) <= 0) return Response.json({ error: "yükseltilecek parça yok" }, { status: 400 });
-    const cost = priceWithDoom(u.cost, doom);
+    if (refused) return Response.json({ error: econNote }, { status: 400 });
+    const cost = econ(priceWithDoom(u.cost, doom));
     if ((ch.gold || 0) < cost)
       return Response.json({ error: "altının yetmiyor" }, { status: 400 });
     ch.gold -= cost;
@@ -147,7 +172,8 @@ export async function POST(
     const kind = String(body.item || "");
     const base = MOUNT_PRICE[kind];
     if (!base) return Response.json({ error: "böyle bir binek yok" }, { status: 400 });
-    const cost = priceWithDoom(base, doom);
+    if (refused) return Response.json({ error: econNote }, { status: 400 });
+    const cost = econ(priceWithDoom(base, doom));
     if ((ch.gold || 0) < cost) return Response.json({ error: "altının yetmiyor" }, { status: 400 });
     ch.gold -= cost;
     ch.mount = kind;

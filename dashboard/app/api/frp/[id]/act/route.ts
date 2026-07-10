@@ -12,7 +12,7 @@ import {
 import { createNotification } from "@/lib/db";
 import { resolveTurn } from "@/lib/frp/engine";
 import { deleteWorldEvents, addWorldEvent } from "@/lib/frp/world";
-import { initSim, tickWorld } from "@/lib/frp/worldsim";
+import { initSim, tickWorld, worldQuestsFrom } from "@/lib/frp/worldsim";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
@@ -249,7 +249,7 @@ export async function POST(
       next = living[ni];
       if (ni === 0) round += 1;
     }
-    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState, quests }));
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState, quests: [...quests, ...worldQuestsFrom(sim.events, quests)] }));
     if (next && next !== handle) {
       try {
         await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });
@@ -312,7 +312,8 @@ export async function POST(
       next = living[ni];
       if (ni === 0) round += 1;
     }
-    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, map_state: sim.mapState }));
+    const campQuests = campaign.quests || [];
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, map_state: sim.mapState, quests: [...campQuests, ...worldQuestsFrom(sim.events, campQuests)] }));
     if (next && next !== handle) {
       try {
         await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });

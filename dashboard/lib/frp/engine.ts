@@ -18,7 +18,7 @@ import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { biomeLabel, timeLabel, weatherLabel, isNight, hexDistanceKey, hexDir, POI_KIND_TR } from "@/lib/frp/movement";
-import { tickWorld } from "@/lib/frp/worldsim";
+import { tickWorld, worldQuestsFrom } from "@/lib/frp/worldsim";
 import { genArena, reconcileArena, ensureParty, stepEnemies, battleContext } from "@/lib/frp/battle";
 import type {
   Character,
@@ -781,10 +781,11 @@ export async function resolveTurn(
     (campaign.state_summary?.memory as string) ||
     "";
   let doom = campaign.doom + (gm.doom_delta || 0);
-  const geoQuests = (campaign.quests || []).filter((q) => q.id.startsWith("geo-"));
+  const isEngineQuest = (id: string) => id.startsWith("geo-") || id.startsWith("wq-");
+  const engineQuests = (campaign.quests || []).filter((q) => isEngineQuest(q.id));
   const quests: Quest[] = Array.isArray(gm.quests)
     ? gm.quests
-        .filter((q) => q && q.title && !String(q.id || q.title).startsWith("geo-"))
+        .filter((q) => q && q.title && !isEngineQuest(String(q.id || q.title)))
         .slice(0, 12)
         .map((q) => ({
           id: String(q.id || q.title).slice(0, 40),
@@ -792,8 +793,8 @@ export async function resolveTurn(
           status: (["active", "done", "failed"].includes(q.status) ? q.status : "active") as Quest["status"],
           kind: (q.kind === "main" ? "main" : "side") as Quest["kind"],
         }))
-    : (campaign.quests || []).filter((q) => !q.id.startsWith("geo-"));
-  quests.push(...geoQuests);
+    : (campaign.quests || []).filter((q) => !isEngineQuest(q.id));
+  quests.push(...engineQuests);
   const reputation = { ...campaign.reputation };
   if (gm.reputation)
     for (const [k, v] of Object.entries(gm.reputation))
@@ -863,6 +864,7 @@ export async function resolveTurn(
     const { mapState, events: simEvents } = tickWorld(omap, campaign.map_state || {}, Math.floor(campaign.map_state?.time ?? 6) + campaignId + campaign.round);
     tickedMapState = mapState;
     for (const ev of simEvents) worldEventQueue.push({ kind: ev.kind, text: ev.text.slice(0, 160), house: ev.house });
+    quests.push(...worldQuestsFrom(simEvents, quests));
   }
 
   doom = clamp(doom, 0, 100);
