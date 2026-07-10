@@ -26,6 +26,12 @@ export const SCENE_EVENTS: Record<string, SceneEvent> = {
     doom: 4,
     news: "Yeşil Yılan ordusu bir meydanda bozguna uğradı; enkazın ortasında dev bir yaratık uyandı.",
   },
+  kizil_gul_sehri: {
+    image: "kizil_gul_sehri",
+    factionDelta: { kizil_gul: 6, kanli_tac: -1 },
+    doom: 3,
+    news: "Kızıl Gül'ün başkenti bin bir gülle taçlanıp kapılarını ardına dek açtı; güzelliğin ardında dikenler bileniyor.",
+  },
 };
 
 export function sceneEvent(key: string | null | undefined): SceneEvent | undefined {

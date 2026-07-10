@@ -24,6 +24,15 @@ export async function createCampaign(input: {
   return rows[0].id;
 }
 
+export interface CampaignPartyMember {
+  name: string;
+  seed: string;
+  cls: string;
+  race: string | null;
+  house: string | null;
+  handle: string;
+}
+
 export interface CampaignListRow {
   id: number;
   title: string;
@@ -36,14 +45,21 @@ export interface CampaignListRow {
   updated_at: string;
   party_size: number;
   joined: boolean;
+  map_seed: string | null;
+  doom: number;
+  current_turn: string | null;
+  factions: Record<string, number> | null;
+  party: CampaignPartyMember[] | null;
 }
 
 export async function listCampaigns(handle: string): Promise<CampaignListRow[]> {
   return (await sql`
     SELECT c.id, c.title, c.setting, c.tone, c.status, c.host, c.difficulty,
-      c.round, c.updated_at,
+      c.round, c.updated_at, c.map_seed, c.doom, c.current_turn, c.factions,
       (SELECT count(*)::int FROM characters ch WHERE ch.campaign_id = c.id) AS party_size,
-      EXISTS(SELECT 1 FROM characters ch WHERE ch.campaign_id = c.id AND ch.handle = ${handle}) AS joined
+      EXISTS(SELECT 1 FROM characters ch WHERE ch.campaign_id = c.id AND ch.handle = ${handle}) AS joined,
+      (SELECT json_agg(json_build_object('name', ch.name, 'seed', ch.portrait_seed, 'cls', ch.class, 'race', ch.race, 'house', ch.house, 'handle', ch.handle) ORDER BY ch.created_at)
+        FROM characters ch WHERE ch.campaign_id = c.id) AS party
     FROM campaigns c
     WHERE c.status IN ('lobby', 'active', 'paused')
     ORDER BY c.updated_at DESC

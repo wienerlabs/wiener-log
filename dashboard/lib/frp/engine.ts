@@ -262,7 +262,7 @@ const RESOLVE_TOOL = {
       scene_event: {
         type: "string",
         description:
-          "Set ONLY when a grand war-scene actually happens in the story, to show its full illustration and shift the map and world. Options: kanli_tac_ordu (the Kanlı Taç host marches out from the capital to war), kara_kuzgun_yagma (the Kara Kuzgun host storms and sacks the CITY the party is currently in, so that city falls to Kara Kuzgun), yesil_yilan_yenik (the Yeşil Yılan army is routed in a plaza and a colossal beast rises from the wreckage). Use rarely, only when the story earns it. Omit otherwise.",
+          "Set ONLY when a grand set-piece scene actually happens in the story, to show its full illustration and shift the map and world. Options: kanli_tac_ordu (the Kanlı Taç host marches out from the capital to war), kara_kuzgun_yagma (the Kara Kuzgun host storms and sacks the CITY the party is currently in, so that city falls to Kara Kuzgun), yesil_yilan_yenik (the Yeşil Yılan army is routed in a plaza and a colossal beast rises from the wreckage), kizil_gul_sehri (the party beholds the Kızıl Gül capital revealed in crimson bloom, its rose banners raised, the house ascendant in beauty and quiet menace). Use rarely, only when the story earns it. Omit otherwise.",
       },
       fire: {
         type: "boolean",

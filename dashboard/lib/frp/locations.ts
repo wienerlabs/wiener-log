@@ -41,6 +41,13 @@ export const LOCATIONS: LocationDef[] = [
     hint: "a plaza strewn with fallen Yeşil Yılan (Serpent) soldiers under green banners, a colossal chained serpent-beast risen at its center",
     big: true,
   },
+  {
+    key: "kizil_gul_sehri",
+    tr: "Kızıl Gül'ün Başkenti Çiçek Açtı",
+    en: "the Red Rose capital in crimson bloom",
+    hint: "the Kızıl Gül (Red Rose) capital at dusk: crimson walls and rose-red towers, a colossal blooming red rose emblem over the gate, banners and thorned rose vines beneath a pale moon",
+    big: true,
+  },
 ];
 
 export function locationByKey(k: string): LocationDef | undefined {
