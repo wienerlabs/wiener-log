@@ -56,6 +56,7 @@ export interface Character {
   abilities: string[];
   gold: number;
   location: string;
+  mount: string | null;
   portrait_seed: string;
   alive: boolean;
   created_at: string;
@@ -101,6 +102,7 @@ export interface Campaign {
   factions: Record<string, number>;
   node_control: Record<string, string>;
   map_seed: string | null;
+  map_state: { time?: number; weather?: string; discovered_pois?: string[] };
   created_at: string;
   updated_at: string;
 }

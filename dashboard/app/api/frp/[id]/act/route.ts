@@ -3,15 +3,19 @@ import {
   getCampaign,
   getCharacters,
   getCharacter,
+  saveCharacter,
   appendTurn,
   updateCampaign,
   restartCampaign,
   lastActionText,
 } from "@/lib/frp/db";
+import { createNotification } from "@/lib/db";
 import { resolveTurn } from "@/lib/frp/engine";
 import { deleteWorldEvents } from "@/lib/frp/world";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
+import { generateMap } from "@/lib/frp/mapgen";
+import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel } from "@/lib/frp/movement";
 import type { Campaign } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +43,7 @@ function fields(c: Campaign, o: Partial<Campaign> = {}) {
     relics: o.relics ?? c.relics,
     factions: o.factions ?? c.factions,
     node_control: o.node_control ?? c.node_control,
+    map_state: o.map_state ?? c.map_state,
   };
 }
 
@@ -59,6 +64,7 @@ export async function POST(
     text?: string;
     mode?: string;
     travel?: string;
+    hexTravel?: string;
   };
 
   if (body.control) {
@@ -70,16 +76,24 @@ export async function POST(
       if (chars.length < 1)
         return Response.json({ error: "need at least one character" }, { status: 400 });
       const order = chars.map((c) => c.handle);
-      await updateCampaign(
-        campaignId,
-        fields(campaign, {
-          status: "active",
-          turn_order: order,
-          current_turn: order[0],
-          round: 1,
-          encounter: null,
-        }),
-      );
+      const startFields: Partial<Campaign> = {
+        status: "active",
+        turn_order: order,
+        current_turn: order[0],
+        round: 1,
+        encounter: null,
+      };
+      if (campaign.map_seed) {
+        const map = generateMap(campaign.map_seed);
+        const startKey = `${map.start.q},${map.start.r}`;
+        for (const c of chars) {
+          c.location = startKey;
+          await saveCharacter(c);
+        }
+        startFields.discovered = hexesWithin(map, startKey, 3);
+        startFields.map_state = { time: 6, weather: "clear", discovered_pois: [] };
+      }
+      await updateCampaign(campaignId, fields(campaign, startFields));
       await appendTurn(
         campaignId,
         "system",
@@ -153,6 +167,69 @@ export async function POST(
     await appendTurn(campaignId, handle, "action", `${dest.name} yönüne yola çıkıyorum.`, null, campaign.round);
     const r = await resolveTurn(campaignId, handle, `Takım ${dest.name} yönüne yola çıkıyor.`, { travelTo: dest.key });
     return Response.json({ ok: r.ok, narration: r.narration, error: r.error });
+  }
+
+  if (body.hexTravel) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    if (campaign.current_turn !== handle)
+      return Response.json({ error: "not your turn" }, { status: 409 });
+    if (!campaign.map_seed)
+      return Response.json({ error: "bu oyunda harita yok" }, { status: 400 });
+    if (campaign.encounter?.active)
+      return Response.json({ error: "savaşta seyahat edilmez" }, { status: 400 });
+    const ch = await getCharacter(campaignId, handle);
+    if (!ch || !ch.alive)
+      return Response.json({ error: "no living character" }, { status: 400 });
+    const map = generateMap(campaign.map_seed);
+    const mount = (ch.mount as "horse" | "boat" | null) || null;
+    const reach = reachable(map, ch.location, moveBudget(ch.class, ch.class2, mount), mount);
+    const dest = String(body.hexTravel);
+    const cost = reach.get(dest);
+    if (cost === undefined)
+      return Response.json({ error: "oraya bu turda ulaşamazsın" }, { status: 400 });
+    ch.location = dest;
+    await saveCharacter(ch);
+
+    const prev = campaign.map_state || {};
+    const clock = advanceClock(
+      { time: prev.time ?? 6, weather: prev.weather ?? "clear", discovered_pois: prev.discovered_pois ?? [] },
+      cost,
+      campaignId,
+    );
+    const destTile = map.tiles.find((t) => `${t.q},${t.r}` === dest)!;
+    const night = isNight(clock.time);
+    const revealed = new Set([
+      ...(campaign.discovered || []),
+      ...hexesWithin(map, dest, visionRadius(destTile, ch.class, ch.class2, night)),
+    ]);
+    const dp = new Set(clock.discovered_pois);
+    for (const p of map.pois) if (p.hidden && hexDistanceKey(dest, `${p.q},${p.r}`) <= 1) dp.add(p.id);
+    clock.discovered_pois = [...dp];
+
+    const poiHere = map.pois.find((p) => p.q === destTile.q && p.r === destTile.r);
+    const line = poiHere && !poiHere.hidden ? `${ch.name}, ${poiHere.name} yakınına vardı.` : `${ch.name}, ${biomeLabel(destTile.biome)} boyunca ilerledi.`;
+    await appendTurn(campaignId, "system", "system", line, null, campaign.round);
+
+    const chars = await getCharacters(campaignId);
+    const living = campaign.turn_order.filter((h) => chars.find((c) => c.handle === h && c.alive));
+    let round = campaign.round;
+    let next = handle;
+    if (living.length) {
+      const idx = living.indexOf(handle);
+      const ni = (idx + 1) % living.length;
+      next = living[ni];
+      if (ni === 0) round += 1;
+    }
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: clock }));
+    if (next && next !== handle) {
+      try {
+        await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });
+      } catch {
+        /* best effort */
+      }
+    }
+    return Response.json({ ok: true });
   }
 
   const text = String(body.text || "").slice(0, 1500).trim();

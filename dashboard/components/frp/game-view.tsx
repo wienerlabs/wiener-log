@@ -159,6 +159,22 @@ export function GameView({
     }
   };
 
+  const hexTravel = async (key: string) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await fetch(`/api/frp/${id}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hexTravel: key }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+    setSending(false);
+  };
+
   const travel = async (nodeKey: string) => {
     if (sending) return;
     setSending(true);
@@ -402,9 +418,11 @@ export function GameView({
             world={world}
             events={events}
             characters={characters}
+            me={me}
             myLocation={myChar?.location ?? null}
             canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
             onTravel={travel}
+            onHexTravel={hexTravel}
             busy={sending}
           />
         ) : null}

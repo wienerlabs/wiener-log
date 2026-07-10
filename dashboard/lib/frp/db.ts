@@ -55,7 +55,7 @@ export async function getCampaign(id: number): Promise<Campaign | null> {
     SELECT id, title, setting, tone, status, host, gm_model, difficulty,
       current_scene, state_summary, turn_order, current_turn, round, encounter,
       doom, quests, reputation, current_location, position, discovered,
-      relics, factions, node_control, map_seed,
+      relics, factions, node_control, map_seed, map_state,
       created_at, updated_at
     FROM campaigns WHERE id = ${id} LIMIT 1
   `) as Campaign[];
@@ -81,6 +81,7 @@ export async function updateCampaign(
     relics?: unknown[];
     factions?: Record<string, number>;
     node_control?: Record<string, string>;
+    map_state?: Record<string, unknown>;
   },
 ): Promise<void> {
   await sql`
@@ -101,6 +102,7 @@ export async function updateCampaign(
       relics = ${JSON.stringify(fields.relics ?? [])}::jsonb,
       factions = ${JSON.stringify(fields.factions ?? {})}::jsonb,
       node_control = ${JSON.stringify(fields.node_control ?? {})}::jsonb,
+      map_state = ${JSON.stringify(fields.map_state ?? {})}::jsonb,
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -114,7 +116,7 @@ export async function getCharacters(campaignId: number): Promise<Character[]> {
   return (await sql`
     SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
       level, xp, hp_cur, hp_max, mp_cur, mp_max, armor, stats, inventory, status_effects,
-      corruption, wielded, abilities, gold, location, portrait_seed, alive, created_at
+      corruption, wielded, abilities, gold, location, mount, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} ORDER BY id ASC
   `) as Character[];
 }
@@ -126,7 +128,7 @@ export async function getCharacter(
   const rows = (await sql`
     SELECT id, campaign_id, handle, name, class, class2, race, house, controlled_by,
       level, xp, hp_cur, hp_max, mp_cur, mp_max, armor, stats, inventory, status_effects,
-      corruption, wielded, abilities, gold, location, portrait_seed, alive, created_at
+      corruption, wielded, abilities, gold, location, mount, portrait_seed, alive, created_at
     FROM characters WHERE campaign_id = ${campaignId} AND handle = ${handle} LIMIT 1
   `) as Character[];
   return rows[0] ?? null;
@@ -173,6 +175,7 @@ export async function saveCharacter(c: Character): Promise<void> {
       abilities = ${JSON.stringify(c.abilities)}::jsonb,
       gold = ${c.gold},
       location = ${c.location},
+      mount = ${c.mount},
       alive = ${c.alive},
       controlled_by = ${c.controlled_by}
     WHERE id = ${c.id}

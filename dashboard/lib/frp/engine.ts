@@ -827,6 +827,7 @@ export async function resolveTurn(
     relics,
     factions,
     node_control: nodeControl,
+    map_state: campaign.map_state || {},
   });
 
   if (next && next !== actorHandle) {
