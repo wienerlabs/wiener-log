@@ -18,6 +18,7 @@ import { nodeByKey, areNeighbors, resolveNode } from "@/lib/frp/worldmap";
 import type { MapNode } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { biomeLabel, timeLabel, weatherLabel, isNight, hexDistanceKey, hexDir, POI_KIND_TR } from "@/lib/frp/movement";
+import { tickWorld } from "@/lib/frp/worldsim";
 import type {
   Character,
   Effect,
@@ -469,12 +470,12 @@ export async function resolveTurn(
     .map(nodeByKey)
     .filter((n): n is MapNode => !!n);
   const dest = opts.travelTo ? nodeByKey(opts.travelTo) : null;
+  const omap = campaign.map_seed ? generateMap(campaign.map_seed) : null;
 
   let hexCtx:
     | { biome: string; region: string | null; danger: number; time: string; weather: string; night: boolean; nearby: { name: string; kind: string; dir: string; dist: number }[] }
     | undefined;
-  if (campaign.map_seed && actor?.location && /^-?\d+,-?\d+$/.test(actor.location)) {
-    const omap = generateMap(campaign.map_seed);
+  if (omap && actor?.location && /^-?\d+,-?\d+$/.test(actor.location)) {
     const [aq, ar] = actor.location.split(",").map(Number);
     const tile = omap.tiles.find((t) => t.q === aq && t.r === ar);
     if (tile) {
@@ -831,6 +832,13 @@ export async function resolveTurn(
     if (drift.news) worldEventQueue.push({ kind: "war", text: drift.news.text, house: drift.news.house });
   }
 
+  let tickedMapState = campaign.map_state || {};
+  if (omap && !opts.isOpening) {
+    const { mapState, events: simEvents } = tickWorld(omap, campaign.map_state || {}, Math.floor(campaign.map_state?.time ?? 6) + campaignId + campaign.round);
+    tickedMapState = mapState;
+    for (const ev of simEvents) worldEventQueue.push({ kind: ev.kind, text: ev.text.slice(0, 160), house: ev.house });
+  }
+
   doom = clamp(doom, 0, 100);
   const relics = Array.from(relicSins);
   for (const ev of worldEventQueue.slice(0, 4))
@@ -859,7 +867,7 @@ export async function resolveTurn(
     relics,
     factions,
     node_control: nodeControl,
-    map_state: campaign.map_state || {},
+    map_state: tickedMapState,
   });
 
   if (next && next !== actorHandle) {

@@ -11,7 +11,8 @@ import {
 } from "@/lib/frp/db";
 import { createNotification } from "@/lib/db";
 import { resolveTurn } from "@/lib/frp/engine";
-import { deleteWorldEvents } from "@/lib/frp/world";
+import { deleteWorldEvents, addWorldEvent } from "@/lib/frp/world";
+import { initSim, tickWorld } from "@/lib/frp/worldsim";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
@@ -91,7 +92,7 @@ export async function POST(
           await saveCharacter(c);
         }
         startFields.discovered = hexesWithin(map, startKey, 3);
-        startFields.map_state = { time: 6, weather: "clear", discovered_pois: [] };
+        startFields.map_state = initSim(map, { time: 6, weather: "clear", discovered_pois: [] });
       }
       await updateCampaign(campaignId, fields(campaign, startFields));
       await appendTurn(
@@ -191,12 +192,7 @@ export async function POST(
     ch.location = dest;
     await saveCharacter(ch);
 
-    const prev = campaign.map_state || {};
-    const clock = advanceClock(
-      { time: prev.time ?? 6, weather: prev.weather ?? "clear", discovered_pois: prev.discovered_pois ?? [] },
-      cost,
-      campaignId,
-    );
+    const clock = advanceClock(campaign.map_state || { time: 6, weather: "clear", discovered_pois: [] }, cost, campaignId);
     const destTile = map.tiles.find((t) => `${t.q},${t.r}` === dest)!;
     const night = isNight(clock.time);
     const revealed = new Set([
@@ -224,6 +220,8 @@ export async function POST(
       return Response.json({ ok: r.ok });
     }
 
+    const sim = tickWorld(map, clock, Math.floor(clock.time) + campaignId + campaign.round);
+    for (const ev of sim.events) await addWorldEvent(campaignId, ev.kind, ev.text.slice(0, 160), ev.house);
     const line = visiblePoi ? `${ch.name}, ${visiblePoi.name} yakınına vardı.` : `${ch.name}, ${biomeLabel(destTile.biome)} boyunca ilerledi.`;
     await appendTurn(campaignId, "system", "system", line, null, campaign.round);
     const chars = await getCharacters(campaignId);
@@ -236,7 +234,7 @@ export async function POST(
       next = living[ni];
       if (ni === 0) round += 1;
     }
-    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: clock }));
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState }));
     if (next && next !== handle) {
       try {
         await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });

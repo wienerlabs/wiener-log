@@ -160,12 +160,17 @@ export function timeLabel(time: number): string {
   return `${String(h).padStart(2, "0")}:00 ${band}`;
 }
 
-export function advanceClock(clock: Clock, hours: number, seed: number): Clock {
-  const time = (clock.time || 6) + hours;
+export function advanceClock<T extends { time?: number; weather?: string; discovered_pois?: string[] }>(
+  clock: T,
+  hours: number,
+  seed: number,
+): T & { time: number; weather: string; discovered_pois: string[] } {
+  const prev = clock.time ?? 6;
+  const time = prev + hours;
   let weather = clock.weather || "clear";
   const roll = (Math.imul((Math.floor(time / 3) + seed) | 0, 2654435761) >>> 0) / 4294967296;
-  if (Math.floor(time / 3) !== Math.floor((clock.time || 6) / 3)) {
+  if (Math.floor(time / 3) !== Math.floor(prev / 3)) {
     weather = WEATHERS[Math.floor(roll * WEATHERS.length)];
   }
-  return { time, weather, discovered_pois: clock.discovered_pois || [] };
+  return { ...clock, time, weather, discovered_pois: clock.discovered_pois || [] };
 }

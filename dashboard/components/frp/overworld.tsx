@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { generateMap } from "@/lib/frp/mapgen";
 import type { MapData, Tile, Poi } from "@/lib/frp/mapgen";
 import { reachable, moveBudget, isNight, weatherLabel, timeLabel, biomeLabel } from "@/lib/frp/movement";
+import { effectiveHouse } from "@/lib/frp/worldsim";
+import type { Army, Caravan } from "@/lib/frp/worldsim";
 import type { Campaign, Character } from "@/lib/frp/types";
 import { Maximize2, X, CloudSun, Moon } from "lucide-react";
 
@@ -78,6 +80,10 @@ function Canvas({
   discovered,
   discoveredPois,
   reachSet,
+  armies,
+  caravans,
+  corruption,
+  control,
   interactive,
   onHexClick,
   onOpenFull,
@@ -87,6 +93,10 @@ function Canvas({
   discovered: Set<string>;
   discoveredPois: Set<string>;
   reachSet: Map<string, number> | null;
+  armies: Army[];
+  caravans: Caravan[];
+  corruption: Set<string>;
+  control: Record<string, string>;
   interactive: boolean;
   onHexClick?: (key: string) => void;
   onOpenFull?: () => void;
@@ -137,7 +147,8 @@ function Canvas({
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const s = `${w}x${h}|${size.toFixed(2)}|${ox.toFixed(1)}|${oy.toFixed(1)}|${discovered.size}`;
+      const controlSig = Object.entries(control).map(([a, b]) => `${a}:${b}`).join(",");
+      const s = `${w}x${h}|${size.toFixed(2)}|${ox.toFixed(1)}|${oy.toFixed(1)}|${discovered.size}|${corruption.size}|${controlSig}`;
       if (sig.current !== s || !terrainRef.current) {
         sig.current = s;
         const off = document.createElement("canvas");
@@ -150,7 +161,8 @@ function Canvas({
         for (const t of map.tiles) {
           const { x, y } = tileCenter(t, size, ox, oy);
           if (x < -size || x > w + size || y < -size || y > h + size) continue;
-          const seen = discovered.has(`${t.q},${t.r}`);
+          const key = `${t.q},${t.r}`;
+          const seen = discovered.has(key);
           hexPath(octx, x, y, size + 0.6);
           if (!seen) {
             octx.fillStyle = "#0d141d";
@@ -160,8 +172,15 @@ function Canvas({
           octx.fillStyle = t.river ? "#2f6690" : BIOME[t.biome];
           octx.fill();
           if (t.region && t.biome !== "deep_water" && t.biome !== "water") {
-            octx.fillStyle = HOUSE_COLOR[t.region] || "#888";
+            const rh = effectiveHouse(control, t.region);
+            octx.fillStyle = HOUSE_COLOR[rh || ""] || "#888";
             octx.globalAlpha = 0.14;
+            octx.fill();
+            octx.globalAlpha = 1;
+          }
+          if (corruption.has(key)) {
+            octx.fillStyle = "#2a0f33";
+            octx.globalAlpha = 0.5;
             octx.fill();
             octx.globalAlpha = 1;
           }
@@ -228,6 +247,44 @@ function Canvas({
         }
       }
 
+      for (const cv of caravans) {
+        if (!discovered.has(`${cv.q},${cv.r}`)) continue;
+        const t = map.tiles.find((x) => x.q === cv.q && x.r === cv.r);
+        if (!t) continue;
+        const { x, y } = tileCenter(t, size, ox, oy);
+        const rad = Math.max(2.5, size * 0.3);
+        ctx.beginPath();
+        ctx.arc(x, y, rad, 0, Math.PI * 2);
+        ctx.fillStyle = "#c8a24a";
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.stroke();
+      }
+      for (const a of armies) {
+        if (!discovered.has(`${a.q},${a.r}`)) continue;
+        const t = map.tiles.find((x) => x.q === a.q && x.r === a.r);
+        if (!t) continue;
+        const { x, y } = tileCenter(t, size, ox, oy);
+        const rad = Math.max(3, size * 0.5);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = HOUSE_COLOR[effectiveHouse(control, a.house) || a.house] || "#999";
+        ctx.fillRect(-rad, -rad, rad * 2, rad * 2);
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "rgba(0,0,0,0.65)";
+        ctx.strokeRect(-rad, -rad, rad * 2, rad * 2);
+        ctx.restore();
+        if (size >= 6) {
+          ctx.fillStyle = "#fff";
+          ctx.font = `bold ${Math.round(rad * 1.05)}px ui-sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(a.siege > 0 ? "⚔" : "⚑", x, y + 0.5);
+        }
+      }
+
       const seenCount = new Map<string, number>();
       for (const c of characters) {
         if (!c.alive) continue;
@@ -262,7 +319,7 @@ function Canvas({
     });
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [map, characters, discovered, discoveredPois, reachSet, hover, interactive, poiByRC, tick]);
+  }, [map, characters, discovered, discoveredPois, reachSet, armies, caravans, corruption, control, hover, interactive, poiByRC, tick]);
 
   const pick = (clientX: number, clientY: number): { t: Tile; poi: Poi | null } | null => {
     const canvas = canvasRef.current;
@@ -372,6 +429,10 @@ export function Overworld({
   const [full, setFull] = useState(false);
   const discovered = useMemo(() => new Set(campaign.discovered || []), [campaign.discovered]);
   const discoveredPois = useMemo(() => new Set(campaign.map_state?.discovered_pois || []), [campaign.map_state]);
+  const armies = useMemo(() => campaign.map_state?.armies || [], [campaign.map_state]);
+  const caravans = useMemo(() => campaign.map_state?.caravans || [], [campaign.map_state]);
+  const corruption = useMemo(() => new Set(campaign.map_state?.corruption || []), [campaign.map_state]);
+  const control = useMemo(() => campaign.map_state?.control || {}, [campaign.map_state]);
   const myChar = characters.find((c) => c.handle === me);
   const isMyTurn = campaign.status === "active" && campaign.current_turn === me && !!myChar?.alive && !campaign.encounter?.active;
   const reachSet = useMemo(() => {
@@ -404,7 +465,7 @@ export function Overworld({
         </button>
       </div>
       <div className="rounded-[10px] overflow-hidden" style={{ height: 190, background: "#070c12", border: "1px solid var(--frp-line)" }}>
-        <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} interactive={false} onOpenFull={() => setFull(true)} />
+        <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive={false} onOpenFull={() => setFull(true)} />
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px]" style={{ color: "var(--frp-muted)" }}>
         <span>{THEME_TR[map.theme] || map.theme} · tohum {map.seed}</span>
@@ -423,7 +484,7 @@ export function Overworld({
           </div>
           <div className="flex-1 px-4 pb-3">
             <div className="h-full w-full rounded-[12px] overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>
-              <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} interactive onHexClick={click} />
+              <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive onHexClick={click} />
             </div>
           </div>
           <div className="px-4 pb-3 text-center text-[11px]" style={{ color: "#7f95a8" }}>
