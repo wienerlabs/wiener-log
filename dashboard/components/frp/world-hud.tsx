@@ -26,6 +26,7 @@ export function WorldHud({
   canTravel,
   onTravel,
   onHexTravel,
+  onCamp,
   busy,
 }: {
   campaign: Campaign;
@@ -37,6 +38,7 @@ export function WorldHud({
   canTravel: boolean;
   onTravel: (key: string) => void;
   onHexTravel: (key: string) => void;
+  onCamp: () => void;
   busy: boolean;
 }) {
   const doom = campaign.doom || 0;
@@ -94,7 +96,7 @@ export function WorldHud({
 
       <div className="mt-3">
         {campaign.map_seed ? (
-          <Overworld campaign={campaign} characters={characters} me={me} onHexTravel={onHexTravel} busy={busy} />
+          <Overworld campaign={campaign} characters={characters} me={me} onHexTravel={onHexTravel} onCamp={onCamp} canTravel={canTravel} busy={busy} />
         ) : (
           <WorldMap
             position={myLocation ?? campaign.position}

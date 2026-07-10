@@ -12,8 +12,11 @@ import {
   MARKET_STOCK,
   FORGE_STOCK,
   FORGE_UPGRADES,
+  MOUNT_PRICE,
+  MOUNT_TR,
 } from "@/lib/frp/items";
 import { WORLD_MAP, isMarket, isForge } from "@/lib/frp/worldmap";
+import { generateMap } from "@/lib/frp/mapgen";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +51,25 @@ export async function POST(
   if (!ch || !ch.alive)
     return Response.json({ error: "canlı karakter yok" }, { status: 400 });
 
-  const node = ch.location ? WORLD_MAP[ch.location] : undefined;
-  if (!node) return Response.json({ error: "burada pazar yok" }, { status: 400 });
-  const market = isMarket(node.kind);
-  const forge = isForge(node.kind);
+  let market = false;
+  let forge = false;
+  if (campaign.map_seed) {
+    const omap = generateMap(campaign.map_seed);
+    const [q, r] = (ch.location || "").split(",").map(Number);
+    const poi = omap.pois.find((p) => p.q === q && p.r === r);
+    if (poi) {
+      market = poi.kind === "market" || poi.kind === "capital";
+      forge = poi.kind === "forge" || poi.kind === "capital";
+    }
+  } else {
+    const node = ch.location ? WORLD_MAP[ch.location] : undefined;
+    if (node) {
+      market = isMarket(node.kind);
+      forge = isForge(node.kind);
+    }
+  }
   if (!market && !forge)
-    return Response.json({ error: "burada alışveriş yok" }, { status: 400 });
+    return Response.json({ error: "burada alışveriş/hizmet yok" }, { status: 400 });
 
   const body = (await req.json()) as { op?: string; item?: string; from?: string };
   const doom = campaign.doom;
@@ -123,6 +139,20 @@ export async function POST(
     ch.gold = (ch.gold || 0) + 100;
     await saveCharacter(ch);
     await appendTurn(campaignId, "system", "system", `${ch.name}, bir altın keseyi 100 bakıra bozdurdu.`, null, campaign.round);
+    return Response.json({ ok: true, gold: ch.gold });
+  }
+
+  if (body.op === "mount") {
+    if (!market) return Response.json({ error: "burada ahır yok" }, { status: 400 });
+    const kind = String(body.item || "");
+    const base = MOUNT_PRICE[kind];
+    if (!base) return Response.json({ error: "böyle bir binek yok" }, { status: 400 });
+    const cost = priceWithDoom(base, doom);
+    if ((ch.gold || 0) < cost) return Response.json({ error: "altının yetmiyor" }, { status: 400 });
+    ch.gold -= cost;
+    ch.mount = kind;
+    await saveCharacter(ch);
+    await appendTurn(campaignId, "system", "system", `${ch.name}, bir ${MOUNT_TR[kind]} edindi (${coinStr(cost)}).`, null, campaign.round);
     return Response.json({ ok: true, gold: ch.gold });
   }
 

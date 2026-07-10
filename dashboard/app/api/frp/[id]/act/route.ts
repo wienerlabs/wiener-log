@@ -17,7 +17,8 @@ import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR } from "@/lib/frp/movement";
-import type { Campaign } from "@/lib/frp/types";
+import { stackInventory, removeFromInventory } from "@/lib/frp/items";
+import type { Campaign, Quest } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -66,6 +67,7 @@ export async function POST(
     mode?: string;
     travel?: string;
     hexTravel?: string;
+    camp?: boolean;
   };
 
   if (body.control) {
@@ -93,6 +95,23 @@ export async function POST(
         }
         startFields.discovered = hexesWithin(map, startKey, 3);
         startFields.map_state = initSim(map, { time: 6, weather: "clear", discovered_pois: [] });
+        const nearest = (kind: string) =>
+          map.pois
+            .filter((p) => p.kind === kind)
+            .map((p) => ({ p, d: hexDistanceKey(startKey, `${p.q},${p.r}`) }))
+            .filter((x) => x.d > 1)
+            .sort((a, b) => a.d - b.d)[0]?.p;
+        const geo: Quest[] = [];
+        const boss = nearest("boss");
+        if (boss)
+          geo.push({ id: `geo-${boss.q}-${boss.r}`, title: `${boss.name} tehdidini sonlandır`, status: "active", kind: "main", target: `${boss.q},${boss.r}` });
+        const sanc = nearest("sanctum") || nearest("wonder");
+        if (sanc)
+          geo.push({ id: `geo-${sanc.q}-${sanc.r}`, title: `${sanc.name} kutsalına eriş`, status: "active", kind: "side", target: `${sanc.q},${sanc.r}` });
+        const dun = nearest("dungeon");
+        if (dun && geo.length < 3)
+          geo.push({ id: `geo-${dun.q}-${dun.r}`, title: `${dun.name} zindanını keşfet`, status: "active", kind: "side", target: `${dun.q},${dun.r}` });
+        if (geo.length) startFields.quests = [...(campaign.quests || []), ...geo];
       }
       await updateCampaign(campaignId, fields(campaign, startFields));
       await appendTurn(
@@ -192,6 +211,12 @@ export async function POST(
     ch.location = dest;
     await saveCharacter(ch);
 
+    const justDone = (campaign.quests || []).filter((qq) => qq.status === "active" && qq.target === dest);
+    const quests: Quest[] = justDone.length
+      ? (campaign.quests || []).map((qq) => (qq.status === "active" && qq.target === dest ? { ...qq, status: "done" as const } : qq))
+      : campaign.quests || [];
+    for (const q of justDone) await appendTurn(campaignId, "system", "system", `Görev tamamlandı: ${q.title}.`, null, campaign.round);
+
     const clock = advanceClock(campaign.map_state || { time: 6, weather: "clear", discovered_pois: [] }, cost, campaignId);
     const destTile = map.tiles.find((t) => `${t.q},${t.r}` === dest)!;
     const night = isNight(clock.time);
@@ -203,7 +228,7 @@ export async function POST(
     for (const p of map.pois) if (p.hidden && hexDistanceKey(dest, `${p.q},${p.r}`) <= 1) dp.add(p.id);
     clock.discovered_pois = [...dp];
 
-    await updateCampaign(campaignId, fields(campaign, { discovered: [...revealed], map_state: clock }));
+    await updateCampaign(campaignId, fields(campaign, { discovered: [...revealed], map_state: clock, quests }));
 
     const poiHere = map.pois.find((p) => p.q === destTile.q && p.r === destTile.r);
     const visiblePoi = poiHere && (!poiHere.hidden || dp.has(poiHere.id)) ? poiHere : null;
@@ -234,7 +259,70 @@ export async function POST(
       next = living[ni];
       if (ni === 0) round += 1;
     }
-    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState }));
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, discovered: [...revealed], map_state: sim.mapState, quests }));
+    if (next && next !== handle) {
+      try {
+        await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });
+      } catch {
+        /* best effort */
+      }
+    }
+    return Response.json({ ok: true });
+  }
+
+  if (body.camp) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    if (campaign.current_turn !== handle)
+      return Response.json({ error: "not your turn" }, { status: 409 });
+    if (!campaign.map_seed)
+      return Response.json({ error: "burada kamp kurulmaz" }, { status: 400 });
+    if (campaign.encounter?.active)
+      return Response.json({ error: "savaşta kamp kurulmaz" }, { status: 400 });
+    const ch = await getCharacter(campaignId, handle);
+    if (!ch || !ch.alive)
+      return Response.json({ error: "no living character" }, { status: 400 });
+    const map = generateMap(campaign.map_seed);
+    const chars = await getCharacters(campaignId);
+    const here = chars.filter((c) => c.alive && c.location === ch.location);
+    let anyFed = false;
+    let anyHungry = false;
+    for (const c of here) {
+      const hasR = stackInventory(c.inventory || []).some((it) => it.id === "rations");
+      c.hp_cur = Math.min(c.hp_max, c.hp_cur + (hasR ? 14 : 5));
+      c.mp_cur = Math.min(c.mp_max, c.mp_cur + (hasR ? 12 : 4));
+      if (hasR) {
+        c.inventory = removeFromInventory(c.inventory, "rations", 1);
+        anyFed = true;
+      } else anyHungry = true;
+      await saveCharacter(c);
+    }
+    const clock = advanceClock(campaign.map_state || { time: 6, weather: "clear", discovered_pois: [] }, 8, campaignId);
+    const [aq, ar] = ch.location.split(",").map(Number);
+    const tile = map.tiles.find((t) => t.q === aq && t.r === ar);
+    const night = isNight(clock.time);
+    const ambRoll = (Math.imul((campaignId * 40503 + Math.floor(clock.time) * 31 + aq * 7 + ar * 13) | 0, 2654435761) >>> 0) / 4294967296;
+    const ambush = ambRoll < (tile ? tile.danger : 10) / 130 + (night ? 0.08 : 0);
+    await appendTurn(campaignId, "system", "system", `Takım kamp kurdu ve dinlendi${anyFed ? " (azık tüketildi)" : ""}${anyHungry ? " (azık tükenmiş, aç kaldılar)" : ""}.`, null, campaign.round);
+
+    if (ambush) {
+      await updateCampaign(campaignId, fields(campaign, { map_state: clock }));
+      const r = await resolveTurn(campaignId, handle, `Kamp gecenin köründe basılıyor; bir düşman ya da yaratık aniden saldırıyor ve savaş başlıyor.`, {});
+      return Response.json({ ok: r.ok });
+    }
+
+    const sim = tickWorld(map, clock, Math.floor(clock.time) + campaignId + campaign.round);
+    for (const ev of sim.events) await addWorldEvent(campaignId, ev.kind, ev.text.slice(0, 160), ev.house);
+    const living = campaign.turn_order.filter((h) => chars.find((c) => c.handle === h && c.alive));
+    let round = campaign.round;
+    let next = handle;
+    if (living.length) {
+      const idx = living.indexOf(handle);
+      const ni = (idx + 1) % living.length;
+      next = living[ni];
+      if (ni === 0) round += 1;
+    }
+    await updateCampaign(campaignId, fields(campaign, { current_turn: next, round, map_state: sim.mapState }));
     if (next && next !== handle) {
       try {
         await createNotification({ recipient: next, actor: "gm", kind: "frp_turn", body: `"${campaign.title}" efsanesinde sıra sende`, link: `/tavern/${campaignId}` });

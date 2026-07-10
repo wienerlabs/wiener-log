@@ -175,6 +175,24 @@ export function GameView({
     setSending(false);
   };
 
+  const camp = async () => {
+    if (sending) return;
+    setSending(true);
+    setThinking(true);
+    try {
+      await fetch(`/api/frp/${id}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ camp: true }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+    setThinking(false);
+    setSending(false);
+  };
+
   const travel = async (nodeKey: string) => {
     if (sending) return;
     setSending(true);
@@ -297,7 +315,7 @@ export function GameView({
         {joined && campaign.status === "active" ? (
           <div className="mt-4">
             {myChar?.alive && !campaign.encounter?.active ? (
-              <ShopPanel id={id} position={myChar.location} doom={world.doom} myChar={myChar} onDone={poll} />
+              <ShopPanel id={id} position={myChar.location} mapSeed={campaign.map_seed} doom={world.doom} myChar={myChar} onDone={poll} />
             ) : null}
             {campaign.encounter?.active && isMyTurn && myChar?.alive ? (
               <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[10px] p-2" style={{ background: "var(--frp-danger-soft)", border: "1px solid var(--frp-line)" }}>
@@ -423,6 +441,7 @@ export function GameView({
             canTravel={isMyTurn && !!myChar?.alive && !campaign.encounter?.active}
             onTravel={travel}
             onHexTravel={hexTravel}
+            onCamp={camp}
             busy={sending}
           />
         ) : null}

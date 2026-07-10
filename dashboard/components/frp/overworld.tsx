@@ -7,7 +7,7 @@ import { reachable, moveBudget, isNight, weatherLabel, timeLabel, biomeLabel } f
 import { effectiveHouse } from "@/lib/frp/worldsim";
 import type { Army, Caravan } from "@/lib/frp/worldsim";
 import type { Campaign, Character } from "@/lib/frp/types";
-import { Maximize2, X, CloudSun, Moon } from "lucide-react";
+import { Maximize2, X, CloudSun, Moon, Tent } from "lucide-react";
 
 const SQRT3 = Math.sqrt(3);
 
@@ -417,12 +417,16 @@ export function Overworld({
   characters,
   me,
   onHexTravel,
+  onCamp,
+  canTravel,
   busy,
 }: {
   campaign: Campaign;
   characters: Character[];
   me: string;
   onHexTravel: (key: string) => void;
+  onCamp: () => void;
+  canTravel: boolean;
   busy: boolean;
 }) {
   const map = useMemo(() => generateMap(campaign.map_seed || "wiener"), [campaign.map_seed]);
@@ -460,9 +464,16 @@ export function Overworld({
           {night ? <Moon className="size-[11px]" strokeWidth={2} /> : <CloudSun className="size-[11px]" strokeWidth={2} />}
           {timeLabel(time)} · {weatherLabel(weather)}
         </span>
-        <button type="button" onClick={() => setFull(true)} className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-0.5" style={{ color: "var(--frp-accent-ink)", background: "var(--frp-accent-soft)" }}>
-          <Maximize2 className="size-[11px]" strokeWidth={2.2} /> büyüt
-        </button>
+        <span className="inline-flex items-center gap-1">
+          {canTravel ? (
+            <button type="button" onClick={onCamp} disabled={busy} className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-0.5 disabled:opacity-50" style={{ color: "var(--frp-ink-soft)", background: "var(--frp-track)" }}>
+              <Tent className="size-[11px]" strokeWidth={2.2} /> kamp
+            </button>
+          ) : null}
+          <button type="button" onClick={() => setFull(true)} className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-0.5" style={{ color: "var(--frp-accent-ink)", background: "var(--frp-accent-soft)" }}>
+            <Maximize2 className="size-[11px]" strokeWidth={2.2} /> büyüt
+          </button>
+        </span>
       </div>
       <div className="rounded-[10px] overflow-hidden" style={{ height: 190, background: "#070c12", border: "1px solid var(--frp-line)" }}>
         <Canvas map={map} characters={characters} discovered={discovered} discoveredPois={discoveredPois} reachSet={reachSet} armies={armies} caravans={caravans} corruption={corruption} control={control} interactive={false} onOpenFull={() => setFull(true)} />
@@ -478,9 +489,16 @@ export function Overworld({
             <div className="text-[13px] font-semibold" style={{ color: "#e7eef3" }}>
               {THEME_TR[map.theme] || map.theme} · tohum {map.seed} · {timeLabel(time)} · {weatherLabel(weather)}
             </div>
-            <button type="button" onClick={() => setFull(false)} className="inline-flex items-center gap-1 rounded-[8px] px-2.5 py-1.5 text-[12px]" style={{ background: "rgba(255,255,255,0.08)", color: "#e7eef3" }}>
-              <X className="size-[14px]" strokeWidth={2} /> kapat
-            </button>
+            <span className="inline-flex items-center gap-2">
+              {canTravel ? (
+                <button type="button" onClick={onCamp} disabled={busy} className="inline-flex items-center gap-1 rounded-[8px] px-2.5 py-1.5 text-[12px] disabled:opacity-50" style={{ background: "rgba(255,255,255,0.08)", color: "#e7eef3" }}>
+                  <Tent className="size-[14px]" strokeWidth={2} /> kamp kur
+                </button>
+              ) : null}
+              <button type="button" onClick={() => setFull(false)} className="inline-flex items-center gap-1 rounded-[8px] px-2.5 py-1.5 text-[12px]" style={{ background: "rgba(255,255,255,0.08)", color: "#e7eef3" }}>
+                <X className="size-[14px]" strokeWidth={2} /> kapat
+              </button>
+            </span>
           </div>
           <div className="flex-1 px-4 pb-3">
             <div className="h-full w-full rounded-[12px] overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.1)" }}>

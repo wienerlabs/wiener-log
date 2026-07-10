@@ -138,6 +138,7 @@ export interface Quest {
   title: string;
   status: "active" | "done" | "failed";
   kind?: "main" | "side";
+  target?: string;
 }
 
 export type TurnKind =

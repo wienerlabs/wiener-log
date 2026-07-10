@@ -40,6 +40,7 @@ const COMMON: ItemDef[] = [
   { id: "torch", name: "Torch", rarity: "common", category: "misc", sprite: "it_torch", desc: "Holds the dark one arm's length away." },
   { id: "key", name: "Rusted Key", rarity: "uncommon", category: "misc", sprite: "it_key", desc: "Opens something. Or someone's memory." },
   { id: "bread", name: "Trail Bread", rarity: "common", category: "consumable", sprite: "it_bread", desc: "Stale, filling, loyal." },
+  { id: "rations", name: "Rations", rarity: "common", category: "consumable", sprite: "it_bread", desc: "Trail rations for the long road." },
   { id: "ring", name: "Silver Ring", rarity: "rare", category: "treasure", sprite: "it_ring", desc: "Warm to the touch. It should not be." },
   { id: "gem", name: "Bloodstone", rarity: "rare", category: "treasure", sprite: "it_gem", desc: "A red that watches back." },
   { id: "gold_pouch", name: "Coin Pouch", rarity: "common", category: "treasure", sprite: "it_coin", desc: "Heavy in the way that changes people." },
@@ -214,6 +215,7 @@ const ITEM_NAME_TR: Record<string, string> = {
   torch: "Meşale",
   key: "Paslı Anahtar",
   bread: "Yol Ekmeği",
+  rations: "Azık",
   ring: "Gümüş Yüzük",
   gem: "Kan Taşı",
   gold_pouch: "Altın Kese",
@@ -252,6 +254,7 @@ const ITEM_DESC_TR: Record<string, string> = {
   torch: "Karanlığı bir kol boyu uzakta tutar.",
   key: "Bir kilidi veya bir sırrı açar.",
   bread: "Bayat ama doyurucu. Yolda güç verir.",
+  rations: "Uzun yol için azık; kamp kurarken tüketilir.",
   ring: "Sıcak dokunuşlu gümüş bir yüzük. Gizli bir güç barındırır.",
   gem: "Geri bakan kızıl bir taş. Değeri ve tehlikesi büyük.",
   gold_pouch: "İnsanı değiştirecek ağırlıkta altın.",
@@ -287,6 +290,7 @@ export const RARITY_TR: Record<Rarity, string> = {
 
 const PRICES: Record<string, number> = {
   bread: 8,
+  rations: 15,
   torch: 10,
   arrows: 25,
   potion_health: 40,
@@ -327,6 +331,7 @@ export const MARKET_STOCK: string[] = [
   "potion_health",
   "potion_mana",
   "bread",
+  "rations",
   "torch",
   "arrows",
   "scroll",
@@ -361,6 +366,17 @@ export const USE_EFFECTS: Record<string, UseEffect> = {
   potion_health: { hp: 20, label: "içti" },
   potion_mana: { mp: 18, label: "içti" },
   bread: { hp: 5, label: "yedi" },
+  rations: { hp: 4, label: "yedi" },
+};
+
+export const MOUNT_PRICE: Record<string, number> = {
+  horse: 220,
+  boat: 380,
+};
+
+export const MOUNT_TR: Record<string, string> = {
+  horse: "At",
+  boat: "Tekne",
 };
 
 export function isConsumable(id: string): boolean {

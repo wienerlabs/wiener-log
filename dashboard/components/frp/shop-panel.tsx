@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PixelSprite } from "@/components/frp/pixel";
 import {
   itemNameTr,
@@ -14,8 +14,11 @@ import {
   MARKET_STOCK,
   FORGE_STOCK,
   FORGE_UPGRADES,
+  MOUNT_PRICE,
+  MOUNT_TR,
 } from "@/lib/frp/items";
 import { WORLD_MAP, isMarket, isForge } from "@/lib/frp/worldmap";
+import { generateMap } from "@/lib/frp/mapgen";
 import type { Character } from "@/lib/frp/types";
 import { Coins } from "lucide-react";
 
@@ -34,25 +37,36 @@ function Coin({ copper }: { copper: number }) {
 export function ShopPanel({
   id,
   position,
+  mapSeed,
   doom,
   myChar,
   onDone,
 }: {
   id: number;
   position: string | null;
+  mapSeed?: string | null;
   doom: number;
   myChar: Character;
   onDone: () => Promise<void> | void;
 }) {
-  const node = position ? WORLD_MAP[position] : undefined;
-  const market = isMarket(node?.kind);
-  const forge = isForge(node?.kind);
+  const place = useMemo(() => {
+    if (mapSeed) {
+      const map = generateMap(mapSeed);
+      const [q, r] = (position || "").split(",").map(Number);
+      const poi = map.pois.find((p) => p.q === q && p.r === r);
+      return { market: !!poi && (poi.kind === "market" || poi.kind === "capital"), forge: !!poi && (poi.kind === "forge" || poi.kind === "capital"), name: poi?.name || "" };
+    }
+    const node = position ? WORLD_MAP[position] : undefined;
+    return { market: isMarket(node?.kind), forge: isForge(node?.kind), name: node?.name || "" };
+  }, [mapSeed, position]);
+  const market = place.market;
+  const forge = place.forge;
   const [tab, setTab] = useState<"pazar" | "demirci" | "sat" | "takas">(market ? "pazar" : "demirci");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
 
-  if (!node || (!market && !forge)) return null;
+  if (!market && !forge) return null;
 
   const gold = myChar.gold || 0;
   const price = (base: number) => priceWithDoom(base, doom);
@@ -91,7 +105,7 @@ export function ShopPanel({
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: "var(--frp-ink-soft)" }}>
           <Coins className="size-[14px]" strokeWidth={2} />
-          {node.name} · {market && forge ? "pazar ve demirci" : market ? "pazar" : "demirci"}
+          {place.name} · {market && forge ? "pazar ve demirci" : market ? "pazar" : "demirci"}
         </span>
         <span className="text-[11px]" style={{ color: "var(--frp-muted)" }}>
           <Coin copper={gold} /> {open ? "▾" : "▸"}
@@ -119,14 +133,38 @@ export function ShopPanel({
           </div>
 
           {tab === "pazar" && market ? (
-            <div className="grid grid-cols-1 gap-1">
-              {MARKET_STOCK.map((iid) => {
-                const p = price(itemPrice(iid));
-                const can = gold >= p && !busy;
-                return (
-                  <Row key={iid} iid={iid} right={<Coin copper={p} />} onClick={() => act("buy", `buy-${iid}`, iid)} disabled={!can} busy={busy === `buy-${iid}`} label="al" />
-                );
-              })}
+            <div className="flex flex-col gap-2.5">
+              <div className="grid grid-cols-1 gap-1">
+                {MARKET_STOCK.map((iid) => {
+                  const p = price(itemPrice(iid));
+                  const can = gold >= p && !busy;
+                  return (
+                    <Row key={iid} iid={iid} right={<Coin copper={p} />} onClick={() => act("buy", `buy-${iid}`, iid)} disabled={!can} busy={busy === `buy-${iid}`} label="al" />
+                  );
+                })}
+              </div>
+              {mapSeed ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold tracking-[0.05em]" style={{ color: "var(--frp-faint)" }}>
+                    Ahır {myChar.mount ? `· ${MOUNT_TR[myChar.mount] || myChar.mount}` : ""}
+                  </div>
+                  <div className="grid grid-cols-1 gap-1">
+                    {Object.keys(MOUNT_PRICE).map((k) => {
+                      const p = price(MOUNT_PRICE[k]);
+                      const can = gold >= p && myChar.mount !== k && !busy;
+                      return (
+                        <button key={k} type="button" onClick={() => act("mount", `mount-${k}`, k)} disabled={!can} className="flex items-center justify-between rounded-[8px] px-2 py-1.5 text-left transition-colors disabled:opacity-40" style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}>
+                          <span className="text-[11px]" style={{ color: "var(--frp-ink-soft)" }}>{MOUNT_TR[k]}{k === "boat" ? " (su geçişi)" : " (daha hızlı)"}</span>
+                          <span className="inline-flex items-center gap-1.5 text-[10.5px]" style={{ color: "var(--frp-muted)" }}>
+                            {busy === `mount-${k}` ? "..." : <Coin copper={p} />}
+                            <span className="rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-semibold" style={{ background: "var(--frp-accent-soft)", color: "var(--frp-accent-ink)" }}>{myChar.mount === k ? "sahip" : "al"}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
