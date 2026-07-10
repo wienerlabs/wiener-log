@@ -1,6 +1,27 @@
 import type { MapData, Tile } from "@/lib/frp/mapgen";
+import type { Quest } from "@/lib/frp/types";
 
 export type Mount = "horse" | "boat" | null;
+
+export function geographyQuests(map: MapData, startKey: string): Quest[] {
+  const nearest = (kind: string) =>
+    map.pois
+      .filter((p) => p.kind === kind)
+      .map((p) => ({ p, d: hexDistanceKey(startKey, `${p.q},${p.r}`) }))
+      .filter((x) => x.d > 1)
+      .sort((a, b) => a.d - b.d)[0]?.p;
+  const geo: Quest[] = [];
+  const boss = nearest("boss");
+  if (boss)
+    geo.push({ id: `geo-${boss.q}-${boss.r}`, title: `${boss.name} tehdidini sonlandır`, status: "active", kind: "main", target: `${boss.q},${boss.r}` });
+  const sanc = nearest("sanctum") || nearest("wonder");
+  if (sanc)
+    geo.push({ id: `geo-${sanc.q}-${sanc.r}`, title: `${sanc.name} kutsalına eriş`, status: "active", kind: "side", target: `${sanc.q},${sanc.r}` });
+  const dun = nearest("dungeon");
+  if (dun && geo.length < 3)
+    geo.push({ id: `geo-${dun.q}-${dun.r}`, title: `${dun.name} zindanını keşfet`, status: "active", kind: "side", target: `${dun.q},${dun.r}` });
+  return geo;
+}
 
 const LAND_COST: Record<string, number> = {
   beach: 1,

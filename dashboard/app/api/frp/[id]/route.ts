@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/session";
-import { getCampaign, getCharacters, getTurns } from "@/lib/frp/db";
+import { getCampaign, getCharacters, getTurns, updateCampaign, saveCharacter } from "@/lib/frp/db";
 import { listWorldEvents } from "@/lib/frp/world";
+import { needsOverworldHeal, healOverworldState } from "@/lib/frp/heal";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,40 @@ export async function GET(
     listWorldEvents(campaignId, 8),
   ]);
   if (!campaign) return new Response("not found", { status: 404 });
+
+  if (needsOverworldHeal(campaign, characters)) {
+    const { fields: patch, charLocations } = healOverworldState(campaign, characters);
+    const m = { ...campaign, ...patch };
+    await updateCampaign(campaignId, {
+      status: m.status,
+      current_scene: m.current_scene,
+      state_summary: m.state_summary,
+      turn_order: m.turn_order,
+      current_turn: m.current_turn,
+      round: m.round,
+      encounter: m.encounter,
+      doom: m.doom,
+      quests: m.quests,
+      reputation: m.reputation,
+      current_location: m.current_location,
+      position: m.position,
+      discovered: m.discovered,
+      relics: m.relics,
+      factions: m.factions,
+      node_control: m.node_control,
+      map_state: m.map_state,
+    });
+    const locById = new Map(charLocations.map((x) => [x.id, x.location]));
+    for (const c of characters) {
+      const nl = locById.get(c.id);
+      if (nl) {
+        c.location = nl;
+        await saveCharacter(c);
+      }
+    }
+    Object.assign(campaign, m);
+  }
+
   const world = {
     doom: campaign.doom,
     relics: campaign.relics || [],

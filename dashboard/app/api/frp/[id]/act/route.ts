@@ -16,7 +16,7 @@ import { initSim, tickWorld } from "@/lib/frp/worldsim";
 import { OPENING_ACTION } from "@/lib/frp/prompts";
 import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
-import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR } from "@/lib/frp/movement";
+import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR, geographyQuests } from "@/lib/frp/movement";
 import { stackInventory, removeFromInventory } from "@/lib/frp/items";
 import { arenaReachable, battleMoveBudget } from "@/lib/frp/battle";
 import type { Campaign, Quest } from "@/lib/frp/types";
@@ -97,22 +97,7 @@ export async function POST(
         }
         startFields.discovered = hexesWithin(map, startKey, 3);
         startFields.map_state = initSim(map, { time: 6, weather: "clear", discovered_pois: [] });
-        const nearest = (kind: string) =>
-          map.pois
-            .filter((p) => p.kind === kind)
-            .map((p) => ({ p, d: hexDistanceKey(startKey, `${p.q},${p.r}`) }))
-            .filter((x) => x.d > 1)
-            .sort((a, b) => a.d - b.d)[0]?.p;
-        const geo: Quest[] = [];
-        const boss = nearest("boss");
-        if (boss)
-          geo.push({ id: `geo-${boss.q}-${boss.r}`, title: `${boss.name} tehdidini sonlandır`, status: "active", kind: "main", target: `${boss.q},${boss.r}` });
-        const sanc = nearest("sanctum") || nearest("wonder");
-        if (sanc)
-          geo.push({ id: `geo-${sanc.q}-${sanc.r}`, title: `${sanc.name} kutsalına eriş`, status: "active", kind: "side", target: `${sanc.q},${sanc.r}` });
-        const dun = nearest("dungeon");
-        if (dun && geo.length < 3)
-          geo.push({ id: `geo-${dun.q}-${dun.r}`, title: `${dun.name} zindanını keşfet`, status: "active", kind: "side", target: `${dun.q},${dun.r}` });
+        const geo = geographyQuests(map, startKey);
         if (geo.length) startFields.quests = [...(campaign.quests || []), ...geo];
       }
       await updateCampaign(campaignId, fields(campaign, startFields));
