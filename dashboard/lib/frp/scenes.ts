@@ -32,6 +32,18 @@ export const SCENE_EVENTS: Record<string, SceneEvent> = {
     doom: 3,
     news: "Kızıl Gül'ün başkenti bin bir gülle taçlanıp kapılarını ardına dek açtı; güzelliğin ardında dikenler bileniyor.",
   },
+  gumus_kurt_suru: {
+    image: "gumus_kurt_suru",
+    factionDelta: { gumus_kurt: 6 },
+    doom: 2,
+    news: "Gümüş Kurt sürüsü kuzey geçidinde toplandı; sürü uludu, kar kana bulanmaya hazırlanıyor.",
+  },
+  altin_aslan_ordu: {
+    image: "altin_aslan_ordu",
+    factionDelta: { altin_aslan: 6, kizil_gul: -1 },
+    doom: 3,
+    news: "Altın Aslan orduları altın sancaklarla şafağa yürüdü; her borç bugün kanla ödenecek.",
+  },
 };
 
 export function sceneEvent(key: string | null | undefined): SceneEvent | undefined {

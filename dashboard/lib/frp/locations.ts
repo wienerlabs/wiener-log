@@ -48,6 +48,20 @@ export const LOCATIONS: LocationDef[] = [
     hint: "the Kızıl Gül (Red Rose) capital at dusk: crimson walls and rose-red towers, a colossal blooming red rose emblem over the gate, banners and thorned rose vines beneath a pale moon",
     big: true,
   },
+  {
+    key: "gumus_kurt_suru",
+    tr: "Gümüş Kurt Sürüsü Kuzeyde Toplandı",
+    en: "the Silver Wolf pack mustering in the north",
+    hint: "the Gümüş Kurt (Silver Wolf) fortress in a snowbound northern night: slate-blue walls and towers, a silver wolf emblem over the gate, pine forest and snowdrifts under an aurora and a pale moon",
+    big: true,
+  },
+  {
+    key: "altin_aslan_ordu",
+    tr: "Altın Aslan Orduları Yürüyüşe Geçti",
+    en: "the Golden Lion host marching at dawn",
+    hint: "the Altın Aslan (Golden Lion) citadel at dawn: golden sandstone walls lit with gold, a radiant lion emblem over the gate, gold pennants and sunburst rays, wealth spilling in the streets",
+    big: true,
+  },
 ];
 
 export function locationByKey(k: string): LocationDef | undefined {
