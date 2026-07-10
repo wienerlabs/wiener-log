@@ -106,6 +106,7 @@ function Canvas({
   const terrainRef = useRef<HTMLCanvasElement | null>(null);
   const view = useRef({ scale: 1, ox: 0, oy: 0, size: 8 });
   const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const pinch = useRef<{ dist: number; scale: number; cx: number; cy: number; ox: number; oy: number } | null>(null);
   const sig = useRef("");
   const [hover, setHover] = useState<{ t: Tile; poi: Poi | null; x: number; y: number } | null>(null);
   const [tick, setTick] = useState(0);
@@ -346,7 +347,7 @@ function Canvas({
     <div
       ref={wrapRef}
       className="relative h-full w-full overflow-hidden"
-      style={{ cursor: interactive ? (drag.current ? "grabbing" : "crosshair") : "pointer", touchAction: "none" }}
+      style={{ cursor: interactive ? (drag.current ? "grabbing" : "crosshair") : "pointer", touchAction: interactive ? "none" : "pan-y" }}
       onMouseDown={(e) => {
         if (!interactive) return;
         drag.current = { x: e.clientX, y: e.clientY, ox: view.current.ox, oy: view.current.oy, moved: false };
@@ -390,6 +391,64 @@ function Canvas({
         view.current.scale = Math.max(0.6, Math.min(7, view.current.scale * f));
         terrainRef.current = null;
         setTick((n) => n + 1);
+      }}
+      onTouchStart={(e) => {
+        if (!interactive) return;
+        if (e.touches.length === 2) {
+          const [a, b] = [e.touches[0], e.touches[1]];
+          pinch.current = {
+            dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1,
+            scale: view.current.scale,
+            cx: (a.clientX + b.clientX) / 2,
+            cy: (a.clientY + b.clientY) / 2,
+            ox: view.current.ox,
+            oy: view.current.oy,
+          };
+          drag.current = null;
+        } else if (e.touches.length === 1) {
+          const t = e.touches[0];
+          drag.current = { x: t.clientX, y: t.clientY, ox: view.current.ox, oy: view.current.oy, moved: false };
+          pinch.current = null;
+          setHover(null);
+        }
+      }}
+      onTouchMove={(e) => {
+        if (!interactive) return;
+        if (pinch.current && e.touches.length === 2) {
+          const [a, b] = [e.touches[0], e.touches[1]];
+          const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+          const rect = wrapRef.current!.getBoundingClientRect();
+          const mx = pinch.current.cx - rect.left;
+          const my = pinch.current.cy - rect.top;
+          const newScale = Math.max(0.6, Math.min(7, pinch.current.scale * (dist / pinch.current.dist)));
+          const k = newScale / pinch.current.scale;
+          view.current.scale = newScale;
+          view.current.ox = mx - (mx - pinch.current.ox) * k;
+          view.current.oy = my - (my - pinch.current.oy) * k;
+          terrainRef.current = null;
+          setTick((n) => n + 1);
+          return;
+        }
+        if (drag.current && e.touches.length === 1) {
+          const t = e.touches[0];
+          const dx = t.clientX - drag.current.x;
+          const dy = t.clientY - drag.current.y;
+          if (Math.abs(dx) + Math.abs(dy) > 3) drag.current.moved = true;
+          view.current.ox = drag.current.ox + dx;
+          view.current.oy = drag.current.oy + dy;
+          terrainRef.current = null;
+          setTick((n) => n + 1);
+        }
+      }}
+      onTouchEnd={(e) => {
+        if (!interactive) return;
+        if (drag.current && !drag.current.moved && !pinch.current && e.changedTouches.length === 1) {
+          const t = e.changedTouches[0];
+          const p = pick(t.clientX, t.clientY);
+          if (p) onHexClick?.(`${p.t.q},${p.t.r}`);
+        }
+        drag.current = null;
+        pinch.current = null;
       }}
     >
       <canvas ref={canvasRef} className="block" style={{ imageRendering: "pixelated" }} />
@@ -506,7 +565,7 @@ export function Overworld({
             </div>
           </div>
           <div className="px-4 pb-3 text-center text-[11px]" style={{ color: "#7f95a8" }}>
-            {isMyTurn ? "mavi altıgene tıkla: git · sürükle: kaydır · tekerlek: yakınlaştır" : "sürükle: kaydır · tekerlek: yakınlaştır · sıra sende değil"}
+            {isMyTurn ? "mavi altıgene dokun: git · sürükle: kaydır · iki parmak / tekerlek: yakınlaştır" : "sürükle: kaydır · iki parmak / tekerlek: yakınlaştır · sıra sende değil"}
           </div>
         </div>
       ) : null}
