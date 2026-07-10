@@ -62,6 +62,16 @@ export const LOCATIONS: LocationDef[] = [
     hint: "the Altın Aslan (Golden Lion) citadel at dawn: golden sandstone walls lit with gold, a radiant lion emblem over the gate, gold pennants and sunburst rays, wealth spilling in the streets",
     big: true,
   },
+  { key: "brothel", tr: "Kerhane", en: "the brothel", hint: "a warm crimson candlelit brothel lounge in a Kanlı Taç city, velvet drapes and courtesans", big: true },
+  { key: "brothel_woman", tr: "Kerhanenin Güzeli", en: "a courtesan of the brothel", hint: "an elegant courtesan in a red gown in a warm candlelit boudoir", big: true },
+  { key: "altin_aslan_street", tr: "Altın Aslan Devriyesi (Sokak)", en: "Golden Lion soldiers on city patrol", hint: "Altın Aslan (Golden Lion) soldiers in gilded armor patrolling a sunlit capital street under lion banners", big: true },
+  { key: "altin_aslan_forest", tr: "Altın Aslan Devriyesi (Orman)", en: "Golden Lion soldiers patrolling a forest", hint: "Altın Aslan (Golden Lion) soldiers patrolling a green forest path in dappled light", big: true },
+  { key: "gumus_kurt_nehir", tr: "Gümüş Kurt Nehri Geçiyor", en: "the Silver Wolf army fording a river", hint: "the Gümüş Kurt (Silver Wolf) host wading across a broad river under wolf banners", big: true },
+  { key: "kara_kuzgun_canavar", tr: "Kara Kuzgun Köyünde Canavar", en: "Raven villagers fighting a monster", hint: "Kara Kuzgun (Raven) soldiers battling a hulking beast among burning village huts at night", big: true },
+  { key: "aslan_tac_savas", tr: "Altın Aslan ve Kanlı Taç Savaşı", en: "Golden Lion besieged by the Blood Crown", hint: "the Kanlı Taç (Blood Crown) host storming a golden Altın Aslan citadel wall, banners of both houses clashing", big: true },
+  { key: "guzel_cadi", tr: "Güzel Cadı", en: "the beautiful witch", hint: "a beautiful witch in her candlelit cottage with a bubbling green cauldron, hanging herbs and love-charm hearts", big: true },
+  { key: "salak_ork", tr: "Salak Ork", en: "a dim-witted ork", hint: "a big goofy green ork with crossed eyes and tusks holding a spiked club in a sunny field", big: true },
+  { key: "elf_ordusu", tr: "Elf Ordusu", en: "an elven host", hint: "an elegant elven army in green and silver with bows and leaf banners in an ethereal moonlit forest", big: true },
 ];
 
 export function locationByKey(k: string): LocationDef | undefined {

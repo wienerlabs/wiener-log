@@ -257,7 +257,7 @@ const RESOLVE_TOOL = {
       location: {
         type: "string",
         description:
-          "Key of a matching location image if the scene is clearly at one (big_city, outer_gate, courtyard, great_hall, blacksmith, market_square, watchtower); otherwise omit.",
+          "Key of a matching scene image when the moment clearly fits one; otherwise omit. Places: big_city, outer_gate, courtyard, great_hall, blacksmith, market_square, watchtower, brothel (a warm brothel in a Kanlı Taç city). Encounters in dangerous or wild places, set ONLY when the party truly meets them and it fits the story (do NOT force them or derail the plot): altin_aslan_street (Altın Aslan soldiers patrolling a Golden Lion city street), altin_aslan_forest (Altın Aslan soldiers patrolling a forest), gumus_kurt_nehir (a Gümüş Kurt army fording a river), kara_kuzgun_canavar (Kara Kuzgun villagers fighting a monster), aslan_tac_savas (the Kanlı Taç army besieging a golden Altın Aslan citadel), elf_ordusu (an elven host). Characters, set when the party actually meets them: brothel_woman (a courtesan, only inside a brothel), guzel_cadi (a beautiful witch, only when the party enters her house — she charms all who see her), salak_ork (a dim-witted ork blocking the way).",
       },
       scene_event: {
         type: "string",
