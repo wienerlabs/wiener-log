@@ -185,6 +185,7 @@ export function buildUserPrompt(
       night: boolean;
       nearby: { name: string; kind: string; dir: string; dist: number }[];
     };
+    battle?: string;
   },
 ): string {
   const memory =
@@ -201,6 +202,10 @@ export function buildUserPrompt(
       .join("\n\n") || "(no prior turns)";
   const enc = campaign.encounter?.active
     ? `\nACTIVE COMBAT: ${campaign.encounter.name}\nEnemies: ${campaign.encounter.enemies.map((e) => `${e.name} (${e.hp}/${e.hp_max} HP)`).join(", ")}`
+    : "";
+  const battleBlock = ctx.battle
+    ? `\nTACTICAL MAP (bird's-eye battle grid; positions are real, honor them): ${ctx.battle}
+Melee reaches only adjacent enemies; ranged attacks and spells strike farther. High ground favors the attacker, cover softens blows. Never teleport a combatant; if @${actorHandle} must close the gap, spending the turn to move is part of the action.`
     : "";
   const items = Object.keys(ITEM_CATALOG).join(", ");
 
@@ -249,7 +254,7 @@ SAVE FILE (world state so far):
 ${memory}
 
 CURRENT SCENE:
-${scene}${enc}
+${scene}${enc}${battleBlock}
 
 DOOM (this party's local Seventh Seal clock): ${campaign.doom}/100
 QUESTS: ${(campaign.quests || []).map((q) => `[${q.status}] ${q.title}`).join(" | ") || "none set yet, establish a main quest"}

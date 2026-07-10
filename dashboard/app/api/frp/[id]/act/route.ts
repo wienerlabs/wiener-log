@@ -18,6 +18,7 @@ import { WORLD_MAP, areNeighbors } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { reachable, hexesWithin, hexDistanceKey, visionRadius, moveBudget, advanceClock, isNight, biomeLabel, POI_KIND_TR } from "@/lib/frp/movement";
 import { stackInventory, removeFromInventory } from "@/lib/frp/items";
+import { arenaReachable, battleMoveBudget } from "@/lib/frp/battle";
 import type { Campaign, Quest } from "@/lib/frp/types";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,7 @@ export async function POST(
     travel?: string;
     hexTravel?: string;
     camp?: boolean;
+    battleMove?: string;
   };
 
   if (body.control) {
@@ -330,6 +332,29 @@ export async function POST(
         /* best effort */
       }
     }
+    return Response.json({ ok: true });
+  }
+
+  if (body.battleMove) {
+    if (campaign.status !== "active")
+      return Response.json({ error: "campaign not active" }, { status: 400 });
+    if (campaign.current_turn !== handle)
+      return Response.json({ error: "not your turn" }, { status: 409 });
+    const arena = campaign.encounter?.active ? campaign.encounter.arena : undefined;
+    if (!arena) return Response.json({ error: "savaş alanı yok" }, { status: 400 });
+    const ch = await getCharacter(campaignId, handle);
+    if (!ch || !ch.alive) return Response.json({ error: "no living character" }, { status: 400 });
+    const from = arena.party[handle];
+    if (!from) return Response.json({ error: "savaşta konumun yok" }, { status: 400 });
+    if ((arena.moved || []).includes(handle))
+      return Response.json({ error: "bu turda zaten mevzilendin; şimdi eylemini yaz" }, { status: 400 });
+    const dest = String(body.battleMove);
+    const reach = arenaReachable(arena, from, battleMoveBudget(ch.class, ch.class2));
+    if (!reach.has(dest)) return Response.json({ error: "oraya bu hamlede ulaşamazsın" }, { status: 400 });
+    const nextArena = { ...arena, party: { ...arena.party, [handle]: dest }, moved: [...(arena.moved || []), handle] };
+    const nextEnc = { ...campaign.encounter!, arena: nextArena };
+    await updateCampaign(campaignId, fields(campaign, { encounter: nextEnc }));
+    await appendTurn(campaignId, "system", "combat", `${ch.name} savaş alanında mevzi değiştirdi.`, null, campaign.round);
     return Response.json({ ok: true });
   }
 

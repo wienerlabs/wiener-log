@@ -70,11 +70,24 @@ export interface Enemy {
   telegraph?: string;
 }
 
+export type ArenaTerrain = "rock" | "tree" | "water" | "high" | "ember";
+
+export interface BattleArena {
+  w: number;
+  h: number;
+  biome: string;
+  terrain: Record<string, ArenaTerrain>;
+  party: Record<string, string>;
+  enemies: string[];
+  moved?: string[];
+}
+
 export interface Encounter {
   active: boolean;
   name: string;
   kind?: "mob" | "boss" | "dungeon";
   enemies: Enemy[];
+  arena?: BattleArena;
 }
 
 export interface Campaign {

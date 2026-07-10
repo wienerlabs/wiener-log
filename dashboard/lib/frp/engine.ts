@@ -19,6 +19,7 @@ import type { MapNode } from "@/lib/frp/worldmap";
 import { generateMap } from "@/lib/frp/mapgen";
 import { biomeLabel, timeLabel, weatherLabel, isNight, hexDistanceKey, hexDir, POI_KIND_TR } from "@/lib/frp/movement";
 import { tickWorld } from "@/lib/frp/worldsim";
+import { genArena, reconcileArena, ensureParty, stepEnemies, battleContext } from "@/lib/frp/battle";
 import type {
   Character,
   Effect,
@@ -512,6 +513,11 @@ export async function resolveTurn(
     }
   }
 
+  let battleCtx: string | undefined;
+  if (!opts.isOpening && campaign.encounter?.active && campaign.encounter.arena && actor?.alive) {
+    battleCtx = battleContext(campaign.encounter.arena, actorHandle, campaign.encounter.enemies) || undefined;
+  }
+
   const pool = rollPool();
   const wild = rollDie(100) <= 8;
   const model =
@@ -525,7 +531,7 @@ export async function resolveTurn(
     action,
     pool,
     wild,
-    { world, worldFeed, node, neighbors, dest, hex: hexCtx },
+    { world, worldFeed, node, neighbors, dest, hex: hexCtx, battle: battleCtx },
   );
   const maxTokens = opts.isOpening ? 1600 : 1050;
   let gm = await callGM(model, userPrompt, maxTokens);
@@ -739,6 +745,24 @@ export async function resolveTurn(
       };
   }
 
+  if (encounter?.active) {
+    const seedBase = campaign.map_seed || `c${campaignId}`;
+    const partyHandles = campaign.turn_order.filter((h) => byHandle.get(h)?.alive);
+    let arenaBiome = "plains";
+    if (omap && actor?.location && /^-?\d+,-?\d+$/.test(actor.location)) {
+      const [aq, ar] = actor.location.split(",").map(Number);
+      arenaBiome = omap.tiles.find((t) => t.q === aq && t.r === ar)?.biome || "plains";
+    }
+    const prevArena = campaign.encounter?.active ? campaign.encounter.arena : undefined;
+    if (prevArena) {
+      let arena = ensureParty(reconcileArena(prevArena, encounter.enemies.length), partyHandles);
+      arena = { ...arena, enemies: stepEnemies(arena, encounter.enemies, seedBase, campaign.round), moved: [] };
+      encounter.arena = arena;
+    } else {
+      encounter.arena = genArena(seedBase, campaignId, campaign.round, arenaBiome, partyHandles, encounter.enemies.length);
+    }
+  }
+
   const living = campaign.turn_order.filter((h) => byHandle.get(h)?.alive);
   let next = actorHandle;
   let round = campaign.round;
@@ -757,17 +781,19 @@ export async function resolveTurn(
     (campaign.state_summary?.memory as string) ||
     "";
   let doom = campaign.doom + (gm.doom_delta || 0);
-  const quests = Array.isArray(gm.quests)
+  const geoQuests = (campaign.quests || []).filter((q) => q.id.startsWith("geo-"));
+  const quests: Quest[] = Array.isArray(gm.quests)
     ? gm.quests
-        .filter((q) => q && q.title)
+        .filter((q) => q && q.title && !String(q.id || q.title).startsWith("geo-"))
         .slice(0, 12)
         .map((q) => ({
           id: String(q.id || q.title).slice(0, 40),
           title: noDash(String(q.title)).slice(0, 120),
-          status: ["active", "done", "failed"].includes(q.status) ? q.status : "active",
-          kind: q.kind === "main" ? "main" : "side",
+          status: (["active", "done", "failed"].includes(q.status) ? q.status : "active") as Quest["status"],
+          kind: (q.kind === "main" ? "main" : "side") as Quest["kind"],
         }))
-    : campaign.quests;
+    : (campaign.quests || []).filter((q) => !q.id.startsWith("geo-"));
+  quests.push(...geoQuests);
   const reputation = { ...campaign.reputation };
   if (gm.reputation)
     for (const [k, v] of Object.entries(gm.reputation))

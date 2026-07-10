@@ -7,6 +7,7 @@ import { PixelSprite, PixelBar } from "@/components/frp/pixel";
 import { ThinkingDice } from "@/components/frp/dice";
 import { FireOverlay } from "@/components/frp/fire-overlay";
 import { WorldHud } from "@/components/frp/world-hud";
+import { BattleMap } from "@/components/frp/battle-map";
 import { ShopPanel } from "@/components/frp/shop-panel";
 import { itemNameTr } from "@/lib/frp/items";
 import type { Campaign, Character, Turn, WorldState, WorldEvent } from "@/lib/frp/types";
@@ -193,6 +194,22 @@ export function GameView({
     setSending(false);
   };
 
+  const battleMove = async (key: string) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await fetch(`/api/frp/${id}/act`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ battleMove: key }),
+      });
+      await poll();
+    } catch {
+      /* ignore */
+    }
+    setSending(false);
+  };
+
   const travel = async (nodeKey: string) => {
     if (sending) return;
     setSending(true);
@@ -291,6 +308,11 @@ export function GameView({
                 </div>
               ))}
             </div>
+            {campaign.encounter.arena ? (
+              <div className="mt-3">
+                <BattleMap campaign={campaign} characters={characters} me={me} onBattleMove={battleMove} busy={sending} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
