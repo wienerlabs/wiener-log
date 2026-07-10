@@ -1,11 +1,21 @@
 import { neon } from "@neondatabase/serverless";
 
-const url = process.env.WLOG_DATABASE_URL;
-if (!url) {
-  throw new Error("WLOG_DATABASE_URL is not set");
+type SqlClient = ReturnType<typeof neon>;
+
+let client: SqlClient | null = null;
+function db(): SqlClient {
+  if (!client) {
+    const url = process.env.WLOG_DATABASE_URL;
+    if (!url) throw new Error("WLOG_DATABASE_URL is not set");
+    client = neon(url);
+  }
+  return client;
 }
 
-export const sql = neon(url);
+export const sql = new Proxy((() => undefined) as unknown as SqlClient, {
+  apply: (_t, _this, args: unknown[]) => (db() as (...a: unknown[]) => unknown)(...args),
+  get: (_t, prop: string | symbol) => (db() as unknown as Record<string | symbol, unknown>)[prop],
+}) as SqlClient;
 
 export type TaskStatus =
   | "proposed"

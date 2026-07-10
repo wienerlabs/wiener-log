@@ -155,6 +155,34 @@ export interface Quest {
   target?: string;
 }
 
+export interface CampaignPartyMember {
+  name: string;
+  seed: string;
+  cls: string;
+  race: string | null;
+  house: string | null;
+  handle: string;
+}
+
+export interface CampaignListRow {
+  id: number;
+  title: string;
+  setting: string;
+  tone: string | null;
+  status: string;
+  host: string;
+  difficulty: string;
+  round: number;
+  updated_at: string;
+  party_size: number;
+  joined: boolean;
+  map_seed: string | null;
+  doom: number;
+  current_turn: string | null;
+  factions: Record<string, number> | null;
+  party: CampaignPartyMember[] | null;
+}
+
 export type TurnKind =
   | "narration"
   | "action"

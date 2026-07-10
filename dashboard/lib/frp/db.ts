@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import type { Campaign, Character, Turn, TurnKind, Encounter } from "@/lib/frp/types";
+import type { Campaign, Character, Turn, TurnKind, Encounter, CampaignListRow } from "@/lib/frp/types";
 import { START_NODE } from "@/lib/frp/worldmap";
 
 const CAMPAIGN_COLS = `id, title, setting, tone, status, host, gm_model, difficulty,
@@ -24,33 +24,7 @@ export async function createCampaign(input: {
   return rows[0].id;
 }
 
-export interface CampaignPartyMember {
-  name: string;
-  seed: string;
-  cls: string;
-  race: string | null;
-  house: string | null;
-  handle: string;
-}
-
-export interface CampaignListRow {
-  id: number;
-  title: string;
-  setting: string;
-  tone: string | null;
-  status: string;
-  host: string;
-  difficulty: string;
-  round: number;
-  updated_at: string;
-  party_size: number;
-  joined: boolean;
-  map_seed: string | null;
-  doom: number;
-  current_turn: string | null;
-  factions: Record<string, number> | null;
-  party: CampaignPartyMember[] | null;
-}
+export type { CampaignPartyMember, CampaignListRow } from "@/lib/frp/types";
 
 export async function listCampaigns(handle: string): Promise<CampaignListRow[]> {
   return (await sql`

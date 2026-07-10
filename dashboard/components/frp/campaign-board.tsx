@@ -6,7 +6,7 @@ import { Users, Swords, Check, Skull, Crown, Dot } from "lucide-react";
 import { PixelPortrait, PixelSprite } from "@/components/frp/pixel";
 import { MapThumb } from "@/components/frp/map-thumb";
 import { houseById } from "@/lib/frp/houses";
-import type { CampaignListRow } from "@/lib/frp/db";
+import type { CampaignListRow } from "@/lib/frp/types";
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   lobby: { label: "Toplanıyor", color: "#c9a24a", bg: "rgba(201,162,74,0.16)" },
