@@ -39,6 +39,7 @@ export interface Character {
   class: string;
   class2: string | null;
   race: string;
+  gender: string;
   house: string | null;
   controlled_by: string | null;
   level: number;

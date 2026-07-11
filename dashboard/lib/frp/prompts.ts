@@ -159,7 +159,8 @@ function sheet(c: Character): string {
       ? "alive"
       : "DEAD";
   const loc = nodeByKey(c.location)?.name || c.location || "unknown";
-  return `@${c.handle} "${c.name}" Lv${c.level} ${c.race} ${cls}${houseStr} | LOCATION: ${loc} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} armor ${c.armor} coin ${c.gold}cp | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
+  const g = c.gender === "female" ? "female " : c.gender === "male" ? "male " : c.gender === "nonbinary" ? "nonbinary " : "";
+  return `@${c.handle} "${c.name}" Lv${c.level} ${g}${c.race} ${cls}${houseStr} | LOCATION: ${loc} | HP ${c.hp_cur}/${c.hp_max} MP ${c.mp_cur}/${c.mp_max} armor ${c.armor} coin ${c.gold}cp | STR${c.stats.str} DEX${c.stats.dex} CON${c.stats.con} INT${c.stats.int} WIS${c.stats.wis} CHA${c.stats.cha} | abilities ${abilities} | wielding ${c.wielded || "nothing special"} | inventory ${inv} | status ${status} | corruption ${corr} | ${state}`;
 }
 
 export function buildUserPrompt(

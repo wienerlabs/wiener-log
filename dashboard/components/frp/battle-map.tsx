@@ -163,7 +163,7 @@ function BattleCanvas({
         });
       };
 
-      const token = (c: Cell, fill: string, ring: string, label: string, hp: number, hpMax: number, dead: boolean, status: StatusEffect[] | undefined, warn: boolean, meRing: boolean, portrait?: { seed: string; race: string | null }) => {
+      const token = (c: Cell, fill: string, ring: string, label: string, hp: number, hpMax: number, dead: boolean, status: StatusEffect[] | undefined, warn: boolean, meRing: boolean, portrait?: { seed: string; race: string | null; gender?: string | null }) => {
         const r = size * 0.6;
         if (meRing && !dead) {
           ctx.beginPath();
@@ -173,7 +173,7 @@ function BattleCanvas({
           ctx.stroke();
         }
         if (portrait) {
-          drawPortraitToken(ctx, portrait.seed, portrait.race, c.x, c.y - size * 0.08, r * 2, ring, dead);
+          drawPortraitToken(ctx, portrait.seed, portrait.race, c.x, c.y - size * 0.08, r * 2, ring, dead, portrait.gender);
         } else {
           ctx.globalAlpha = dead ? 0.4 : 1;
           ctx.beginPath();
@@ -222,7 +222,7 @@ function BattleCanvas({
         if (!c) continue;
         const ch2 = P.characters.find((x) => x.handle === handle);
         const dead = ch2 ? !ch2.alive : false;
-        token(c, "#123240", k === P.meKey ? "#e0b64d" : "#3f8fb0", (ch2?.name || handle).slice(0, 1).toUpperCase(), ch2?.hp_cur ?? 1, ch2?.hp_max ?? 1, dead, ch2?.status_effects, false, k === P.meKey, ch2 ? { seed: ch2.portrait_seed || ch2.handle, race: ch2.race } : undefined);
+        token(c, "#123240", k === P.meKey ? "#e0b64d" : "#3f8fb0", (ch2?.name || handle).slice(0, 1).toUpperCase(), ch2?.hp_cur ?? 1, ch2?.hp_max ?? 1, dead, ch2?.status_effects, false, k === P.meKey, ch2 ? { seed: ch2.portrait_seed || ch2.handle, race: ch2.race, gender: ch2.gender } : undefined);
       }
 
       const live: Floater[] = [];

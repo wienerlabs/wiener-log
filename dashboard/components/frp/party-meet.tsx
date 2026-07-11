@@ -48,7 +48,7 @@ export function PartyMeet({
         {allies.map((a) => (
           <div key={a.handle} className="flex items-start gap-2.5 rounded-[10px] p-2" style={{ background: "var(--frp-canvas)", border: "1px solid var(--frp-line)" }}>
             <div className="shrink-0 overflow-hidden rounded-[8px]" style={{ border: "1px solid var(--frp-line)" }}>
-              <PixelPortrait seed={a.portrait_seed || a.handle} race={a.race} cell={3} />
+              <PixelPortrait seed={a.portrait_seed || a.handle} race={a.race} gender={a.gender} cell={3} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">

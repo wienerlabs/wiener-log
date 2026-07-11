@@ -24,6 +24,7 @@ export function JoinPanel({
   const [cls, setCls] = useState(CLASSES[0].id);
   const [cls2, setCls2] = useState<string | null>(null);
   const [race, setRace] = useState(RACES[0].id);
+  const [gender, setGender] = useState("female");
   const [trait, setTrait] = useState(TRAITS[0]);
   const [house, setHouse] = useState(HOUSES[0].id);
   const [shiftForm, setShiftForm] = useState("");
@@ -49,7 +50,7 @@ export function JoinPanel({
       const res = await fetch(`/api/frp/${id}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, trait, house, shiftForm: isTamer ? shiftForm : "" }),
+        body: JSON.stringify({ name, cls, cls2: dualAllowed ? cls2 : null, race, gender, trait, house, shiftForm: isTamer ? shiftForm : "" }),
       });
       if (res.ok) router.refresh();
       else setBusy(false);
@@ -67,7 +68,7 @@ export function JoinPanel({
     <div className="rounded-[16px] p-5" style={{ background: "var(--frp-surface)", border: "1px solid var(--frp-line)" }}>
       <div className="mb-5 flex items-center gap-3">
         <div className="rounded-[12px] p-1.5" style={{ background: "#00000010", border: "1px solid var(--frp-line)" }}>
-          <PixelPortrait seed={seed} race={race} cell={7} />
+          <PixelPortrait seed={seed} race={race} gender={gender} cell={7} />
         </div>
         <div>
           <div className="text-[16px] font-semibold" style={{ color: "var(--frp-ink)" }}>
@@ -77,6 +78,27 @@ export function JoinPanel({
             {RACE_TR[race]?.name} {clsTr?.name}
             {cls2Tr ? ` / ${cls2Tr.name}` : ""} · {trait} · {HOUSES.find((h) => h.id === house)?.name}
           </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ color: "var(--frp-faint)" }}>Cinsiyet</div>
+        <div className="flex gap-1.5">
+          {[{ id: "female", tr: "Kadın" }, { id: "male", tr: "Erkek" }, { id: "nonbinary", tr: "Diğer" }].map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setGender(g.id)}
+              className="flex-1 rounded-[9px] px-3 py-2 text-[12.5px] font-medium transition-colors"
+              style={{
+                border: `1px solid ${gender === g.id ? "var(--frp-accent)" : "var(--frp-line)"}`,
+                background: gender === g.id ? "var(--frp-accent-soft)" : "var(--frp-canvas)",
+                color: gender === g.id ? "var(--frp-accent-ink)" : "var(--frp-muted)",
+              }}
+            >
+              {g.tr}
+            </button>
+          ))}
         </div>
       </div>
 

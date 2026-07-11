@@ -109,6 +109,7 @@ export function buildPortrait(
   seed: string,
   race?: string,
   sin?: Sin,
+  gender?: string,
 ): (string | null)[][] {
   const N = 20;
   const g: (string | null)[][] = Array.from({ length: N }, () =>
@@ -123,8 +124,9 @@ export function buildPortrait(
     const eye = sin
       ? SIN_COLOR[sin] || "#2a2020"
       : (race && RACE_EYE[race]) || pick(EYES, 7);
-    const beard = ((hs >>> 11) & 1) === 1 || race === "dwarf";
-    const style = (hs >>> 13) % 3;
+    const female = gender === "female";
+    const beard = !female && (((hs >>> 11) & 1) === 1 || race === "dwarf");
+    const style = female ? 1 : (hs >>> 13) % 3;
     const cloth = pick(CLOTHS, 17);
     const dark = shade(skin, -22);
     const dark2 = shade(skin, -40);
@@ -240,6 +242,29 @@ export function buildPortrait(
         g[0][11] = "#c79a45";
       }
     }
+    if (female) {
+      for (let y = 4; y <= 13; y++) {
+        g[y][5] = hair;
+        g[y][14] = hair;
+      }
+      for (let y = 14; y <= 17; y++) {
+        g[y][4] = hair;
+        g[y][5] = hair;
+        g[y][14] = hair;
+        g[y][15] = hair;
+      }
+      g[16][4] = shade(hair, -12);
+      g[16][15] = shade(hair, -12);
+      const lip = "#bd5f66";
+      g[12][8] = lip;
+      g[12][9] = lip;
+      g[12][10] = lip;
+      g[12][11] = lip;
+      g[13][9] = "#a04a52";
+      g[13][10] = "#a04a52";
+      g[7][7] = shade(hair, -6);
+      g[7][12] = shade(hair, -6);
+    }
     if (race === "orc" || race === "goblin") {
       g[13][8] = white;
       g[13][11] = white;
@@ -262,15 +287,17 @@ export function PixelPortrait({
   cell = 6,
   race,
   sin,
+  gender,
   className,
 }: {
   seed: string;
   cell?: number;
   race?: string | null;
   sin?: Sin | null;
+  gender?: string | null;
   className?: string;
 }) {
-  const g = buildPortrait(seed, race ?? undefined, sin ?? undefined);
+  const g = buildPortrait(seed, race ?? undefined, sin ?? undefined, gender ?? undefined);
   const n = g.length;
   const size = n * cell;
   const rects: ReactNode[] = [];

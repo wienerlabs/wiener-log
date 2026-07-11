@@ -64,6 +64,7 @@ export function CharacterCard({
           <PixelPortrait
             seed={c.portrait_seed}
             race={c.race}
+            gender={c.gender}
             cell={compact ? 4 : 6}
             sin={dom && dom.value >= 25 ? dom.sin : null}
           />

@@ -35,10 +35,12 @@ export async function POST(
     cls?: string;
     cls2?: string | null;
     race?: string;
+    gender?: string;
     trait?: string;
     house?: string;
     shiftForm?: string;
   };
+  const gender = ["female", "male", "nonbinary"].includes(String(body.gender)) ? String(body.gender) : "unspecified";
   const house = body.house ? houseById(String(body.house)) : null;
   const cls = classById(String(body.cls || ""));
   const race = raceById(String(body.race || ""));
@@ -91,6 +93,7 @@ export async function POST(
     cls: cls.id,
     cls2: cls2 ? cls2.id : null,
     race: race.id,
+    gender,
     house: house ? house.id : null,
     hp,
     mp,

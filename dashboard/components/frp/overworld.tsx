@@ -333,7 +333,7 @@ function Canvas({
         const rad = Math.max(6, size * 0.62);
         const px = x + (idx % 3) * rad * 0.8 - rad * 0.8;
         const py = y - Math.floor(idx / 3) * rad * 0.8;
-        drawPortraitToken(ctx, c.portrait_seed || c.handle, c.race, px, py, rad * 2, c.handle === me ? "#e0b64d" : "#2f81f7");
+        drawPortraitToken(ctx, c.portrait_seed || c.handle, c.race, px, py, rad * 2, c.handle === me ? "#e0b64d" : "#2f81f7", false, c.gender);
         if (rad > 9) {
           const label = c.name || c.handle;
           ctx.font = `600 ${Math.round(rad * 0.62)}px ui-sans-serif`;

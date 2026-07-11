@@ -2,11 +2,11 @@ import { buildPortrait } from "./pixel";
 
 const cache = new Map<string, (string | null)[][]>();
 
-function grid(seed: string, race?: string | null): (string | null)[][] {
-  const k = `${seed}|${race || ""}`;
+function grid(seed: string, race?: string | null, gender?: string | null): (string | null)[][] {
+  const k = `${seed}|${race || ""}|${gender || ""}`;
   let g = cache.get(k);
   if (!g) {
-    g = buildPortrait(seed, race || undefined, undefined);
+    g = buildPortrait(seed, race || undefined, undefined, gender || undefined);
     cache.set(k, g);
   }
   return g;
@@ -21,8 +21,9 @@ export function drawPortraitToken(
   d: number,
   ring: string,
   dead = false,
+  gender?: string | null,
 ): void {
-  const g = grid(seed, race);
+  const g = grid(seed, race, gender);
   const n = g.length;
   const cell = d / n;
   const x0 = cx - d / 2;
