@@ -15,6 +15,10 @@ const ADMIN_ONLY = [
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (pathname === "/tavern" || pathname.startsWith("/tavern/")) {
+    const dest = pathname === "/tavern" ? "https://tavern-0raclus-projects.vercel.app" : `https://tavern-0raclus-projects.vercel.app/game/${pathname.slice("/tavern/".length)}`;
+    return NextResponse.redirect(dest, 308);
+  }
   if (pathname === "/login" || pathname.startsWith("/invite"))
     return NextResponse.next();
   if (
